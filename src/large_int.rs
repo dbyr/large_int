@@ -221,7 +221,6 @@ impl Shl<usize> for LargeInt {
             result.bytes[0] = 0;
             remaining -= 128;
         }
-        println!("{:?}", result);
 
         // shift the remainder
         let mut result_mask = 0;
