@@ -1,0 +1,5 @@
+# LargeInt
+An integer datatype that (practically) has no limit on size. This implementation aims to provide a means of performing calculations easily and intuitively with numbers larger than the largest primitive integer type provided in Rust (128 bits). It also aims to be able to integrate easily with existing primitive types, such that they can be added and subtracted easily from LargeInts. LargeInt is always signed, but because it can grow indefinitely there is no downfall to this.
+
+### When to Use LargeInt
+LargeInt should ONLY be used when values are expected to go beyond `u128::MAX`. I find the likelihood of this datatype ever really being useful slim (since 128 bits already provides VERY large numbers), however it's a nice-to-have for anyone who may find themselves in need of it. That said, I mostly built it for fun and out of intrigue. Using this type in circumstances outside of this is not recommended because it will be slower than simply using a primitive type.

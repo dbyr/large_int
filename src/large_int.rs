@@ -1,13 +1,15 @@
 use std::u128;
 use std::ops::{
     Add,
-    Sub
+    AddAssign,
+    Sub,
+    SubAssign
 };
 
 // store a vector of little-endian, 2's compliment figures
 // the sign bit is in the most significant figure (more[0])
 // littel endian was chosen so vec operations are faster
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct LargeInt {
     // use u128 since, if someone needs a LargeInt, it's likely
     // going to end up larger than u128::MAX
@@ -22,7 +24,7 @@ fn is_u128_negative(val: u128) -> bool {
 
 impl LargeInt {
     pub fn new() -> LargeInt {
-        LargeInt{bytes: vec!(0; 1)}
+        LargeInt{bytes: vec!(0)}
     }
 
     pub fn with_size(size: usize) -> LargeInt {
@@ -44,7 +46,7 @@ impl LargeInt {
         } else {
             (0u128, Box::new(|chunk| is_u128_negative(chunk)))
         };
-        for i in self.bytes.len() - 1..0 {
+        for i in (1..self.bytes.len()).rev() {
             if checker(self.bytes[i - 1]) {
                 break;
             } else if self.bytes[i] == remove_chunk {
@@ -72,17 +74,9 @@ impl LargeInt {
         for i in 0..size {
             compliment.bytes[i] = self.bytes[i] ^ u128::MAX;
         }
-        compliment + LargeInt::from(1)
+        compliment + 1
     }
 }
-
-// impl Add<u128> for LargeInt {
-//     type Output = LargeInt;
-
-//     fn add(self, other: u128) -> LargeInt {
-//         let size
-//     }
-// }
 
 impl Add for LargeInt {
     type Output = LargeInt;
@@ -111,15 +105,29 @@ impl Add for LargeInt {
             o_f = overflowed || add_res.1;
             result.bytes[i] = res;
         }
+        result.shrink();
         result
+    }
+}
+
+impl AddAssign for LargeInt {
+    fn add_assign(&mut self, other: LargeInt) {
+        self.bytes = (self.clone() + other).bytes;
     }
 }
 
 impl Sub for LargeInt {
     type Output = LargeInt;
 
+    // use the implmentation of addition for subtraction
     fn sub(self, other: LargeInt) -> LargeInt {
-        LargeInt{bytes: vec!(0;1)}
+        self + other.compliment()
+    }
+}
+
+impl SubAssign for LargeInt {
+    fn sub_assign(&mut self, other: LargeInt) {
+        self.bytes = (self.clone() - other).bytes;
     }
 }
 
@@ -133,13 +141,14 @@ macro_rules! ops {
             }
         })*
 
-        // $(impl Add<$t> for LargeInt {
-        //     type Output = LargeInt;
+        $(impl Add<$t> for LargeInt {
+            type Output = LargeInt;
 
-        //     fn add(self, other: $t) -> LargeInt {
-
-        //     }
-        // })*
+            fn add(self, other: $t) -> LargeInt {
+                let oth = LargeInt::from(other);
+                self + oth
+            }
+        })*
     };
 }
 
@@ -147,7 +156,10 @@ ops!(i8 i32 i64 i128 isize u8 u32 u64 u128 usize);
 
 #[cfg(test)]
 mod tests {
-    use crate::large_int::LargeInt;
+    use crate::large_int::{
+        LargeInt,
+        SIGN_BIT
+    };
     
     use std::u128;
 
@@ -161,5 +173,113 @@ mod tests {
         assert_eq!(li.bytes[0], u128::MAX); // 2's compliment rep of -1 is all 1s
 
         assert!(li.is_negative());
+    }
+
+    #[test]
+    fn test_is_negative() {
+        let mut li = LargeInt{bytes: vec!(1, 0)};
+        assert!(!li.is_negative());
+
+        li.bytes[0] = u128::MAX;
+        assert!(!li.is_negative());
+
+        li.bytes[1] = u128::MAX;
+        assert!(li.is_negative());
+
+        li.bytes[1] ^= SIGN_BIT;
+        assert!(!li.is_negative());
+
+        li.bytes.push(u128::MAX);
+        assert!(li.is_negative());
+    }
+
+    #[test]
+    fn test_shrink() {
+        // shrink because b1111 == b111 == b11 (== d-1) etc
+        let mut li = LargeInt{bytes: vec!(u128::MAX; 2)};
+        li.shrink();
+        assert_eq!(li.bytes.len(), 1);
+        assert_eq!(li.bytes[0], u128::MAX);
+
+        // shrink because b0001 == b001 == b01 (== d1) etc
+        li = LargeInt{bytes: vec!(1, 0)};
+        li.shrink();
+        assert_eq!(li.bytes.len(), 1);
+        assert_eq!(li.bytes[0], 1);
+
+        // don't shrink because d7 == b0111 != b111 == d-1
+        li = LargeInt{bytes: vec!(u128::MAX - 1, 0)};
+        li.shrink();
+        assert_eq!(li.bytes.len(), 2);
+        assert_eq!(li.bytes[0], u128::MAX - 1);
+        assert_eq!(li.bytes[1], 0);
+
+        // don't shrink because b0010 != b10
+        li = LargeInt{bytes: vec!(1 << 127, 0)};
+        li.shrink();
+        assert_eq!(li.bytes.len(), 2);
+        assert_eq!(li.bytes[0], 1 << 127);
+        assert_eq!(li.bytes[1], 0);
+    }
+
+    #[test]
+    fn test_add() {
+
+        // two negatives
+        let li1 = LargeInt{bytes: vec!(u128::MAX; 2)};
+        let li2 = LargeInt{bytes: vec!(u128::MAX; 2)};
+        assert_eq!(li1 + li2, LargeInt{bytes: vec!(u128::MAX - 1)});
+
+        // two negatives (and overflow)
+        let li1 = LargeInt{bytes: vec!(1 << 127)};
+        let li2 = LargeInt{bytes: vec!(1 << 127)};
+        assert_eq!(li1 + li2, LargeInt{bytes: vec!(0, u128::MAX)});
+
+        // two positives
+        let li1 = LargeInt{bytes: vec!(23)};
+        let li2 = LargeInt{bytes: vec!(2)};
+        assert_eq!(li1 + li2, LargeInt{bytes: vec!(25)});
+
+        // two positives (and overflow)
+        let li1 = LargeInt{bytes: vec!(1 << 126)};
+        let li2 = LargeInt{bytes: vec!(1 << 126)};
+        assert_eq!(li1 + li2, LargeInt{bytes: vec!(1 << 127, 0)});
+
+        // positive and negative
+        let li1 = LargeInt{bytes: vec!(2)};
+        let li2 = LargeInt{bytes: vec!(u128::MAX)};
+        assert_eq!(li1 + li2, LargeInt{bytes: vec!(1)});
+
+        // different sizes positive
+        let li1 = LargeInt{bytes: vec!(3, 1, 1 << 126)};
+        let li2 = LargeInt{bytes: vec!(4)};
+        assert_eq!(li1 + li2, LargeInt{bytes: vec!(7, 1, 1 << 126)});
+
+        // different sizes positive (and overflow)
+        let li1 = LargeInt{bytes: vec!(3, 1, 1 << 126)};
+        let li2 = LargeInt{bytes: vec!(u128::MAX, 0)};
+        assert_eq!(li1 + li2, LargeInt{bytes: vec!(2, 2, 1 << 126)});
+
+        // different sizes and signs
+        let li1 = LargeInt{bytes: vec!(3, 1, 1 << 126)};
+        let li2 = LargeInt{bytes: vec!(u128::MAX)};
+        assert_eq!(li1 + li2, LargeInt{bytes: vec!(2, 1, 1 << 126)});
+
+        // different sizes and signs (and overflow)
+        let li1 = LargeInt{bytes: vec!(3, 1, 1 << 126)};
+        let li2 = LargeInt{bytes: vec!(u128::MAX ^ (3))}; // represents -4
+        assert_eq!(li1 + li2, LargeInt{bytes: vec!(u128::MAX, 0, 1 << 126)});
+    }
+
+    // tests for sub are minimal simply because it uses add
+    #[test]
+    fn test_sub() {
+        let li1 = LargeInt{bytes: vec!(4)};
+        let li2 = LargeInt{bytes: vec!(1)};
+        assert_eq!(li1 - li2, LargeInt{bytes: vec!(3)});
+
+        let li1 = LargeInt{bytes: vec!(4)};
+        let li2 = LargeInt{bytes: vec!(u128::MAX)};
+        assert_eq!(li1 - li2, LargeInt{bytes: vec!(5)});
     }
 }
