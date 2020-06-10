@@ -67,7 +67,9 @@ impl LargeInt {
                 break;
             } else if self.bytes[i] == remove_chunk {
                 self.bytes.pop();
+                continue;
             }
+            break;
         }
     }
 
@@ -189,12 +191,48 @@ impl Shr<usize> for LargeInt {
 
         // shift the remainder
         let mut result_mask = 0;
-        let data_mask = (1u128.checked_shl(remaining as u32).unwrap_or(0) as i128 - 1) as u128;
+        let data_mask = (
+            1u128.checked_shl(remaining as u32).unwrap_or(0) as i128 - 1
+        ) as u128;
         for i in (0..size).rev() {
             let temp_mask = result.bytes[i] & data_mask;
             result.bytes[i] = result.bytes[i].checked_shr(remaining as u32).unwrap_or(0);
             result.bytes[i] |= result_mask;
             result_mask = temp_mask.checked_shl(128 - remaining as u32).unwrap_or(0);
+        }
+        result.shrink();
+        result
+    }
+}
+
+impl Shl<usize> for LargeInt {
+    type Output = LargeInt;
+
+    fn shl(self, bits: usize) -> LargeInt {
+        let mut remaining = bits;
+        let mut result = self.clone();
+        let size = result.bytes.len();
+
+        // shift chunks left while required
+        while remaining > 128 {
+            for i in (1..size).rev() {
+                result.bytes[i] = result.bytes[i - 1];
+            }
+            result.bytes[0] = 0;
+            remaining -= 128;
+        }
+        println!("{:?}", result);
+
+        // shift the remainder
+        let mut result_mask = 0;
+        let data_mask = (
+            u128::MAX.checked_shl(128 - remaining as u32).unwrap_or(0) as i128
+        ) as u128;
+        for i in 0..size {
+            let temp_mask = result.bytes[i] & data_mask;
+            result.bytes[i] = result.bytes[i].checked_shl(remaining as u32).unwrap_or(0);
+            result.bytes[i] |= result_mask;
+            result_mask = temp_mask.checked_shr(128 - remaining as u32).unwrap_or(0);
         }
         result.shrink();
         result
@@ -290,6 +328,11 @@ mod tests {
         assert_eq!(li.bytes.len(), 2);
         assert_eq!(li.bytes[0], 1 << 127);
         assert_eq!(li.bytes[1], 0);
+
+        li = LargeInt{bytes: vec!(0, 0, 2)};
+        li.shrink();
+        assert_eq!(li.bytes.len(), 3);
+        assert_eq!(li, LargeInt{bytes: vec!(0, 0, 2)});
     }
 
     #[test]
@@ -378,5 +421,28 @@ mod tests {
         // test large shifts
         let li = LargeInt{bytes: vec!(4, 3, 4)};
         assert_eq!(li >> 257, LargeInt{bytes: vec!(2)})
+    }
+
+    #[test]
+    fn test_shl() {
+
+        // test easy case
+        let li = LargeInt{bytes: vec!(3)};
+        assert_eq!(li << 1, LargeInt{bytes: vec!(6)});
+
+        let li = LargeInt{bytes: vec!(0, 3)};
+        assert_eq!(li << 1, LargeInt{bytes: vec!(0, 6)});
+
+        let li = LargeInt{bytes: vec!(u128::MAX)};
+        assert_eq!(li << 1, LargeInt{bytes: vec!(u128::MAX - 1)});
+
+        let li = LargeInt{bytes: vec!(1 << 127)};
+        assert_eq!(li << 1, LargeInt{bytes: vec!(0)});
+
+        let li = LargeInt{bytes: vec!(u128::MAX, 1)};
+        assert_eq!(li << 1, LargeInt{bytes: vec!(u128::MAX - 1, 3)});
+
+        let li = LargeInt{bytes: vec!(1, 2, 3)};
+        assert_eq!(li << 257, LargeInt{bytes: vec!(0, 0, 2)});
     }
 }
