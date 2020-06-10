@@ -1,9 +1,19 @@
 use std::u128;
+use std::str::FromStr;
+use std::num::ParseIntError;
 use std::ops::{
     Add,
     AddAssign,
     Sub,
-    SubAssign
+    SubAssign,
+    Mul,
+    MulAssign,
+    Div,
+    DivAssign,
+    Shr,
+    ShrAssign,
+    Shl,
+    ShlAssign
 };
 
 // store a vector of little-endian, 2's compliment figures
@@ -13,7 +23,7 @@ use std::ops::{
 pub struct LargeInt {
     // use u128 since, if someone needs a LargeInt, it's likely
     // going to end up larger than u128::MAX
-    bytes: Vec<u128>
+    bytes: Vec<u128> // (called "bytes" because it was originally u8)
 }
 
 const SIGN_BIT: u128 = 1u128 << 127;
@@ -21,6 +31,12 @@ const SIGN_BIT: u128 = 1u128 << 127;
 fn is_u128_negative(val: u128) -> bool {
     (val & SIGN_BIT) > 1
 }
+
+// fn multiply_string_int(rep: &mut String, by: i64) {
+
+// }
+
+// fn multiply_u128_with_overflow()
 
 impl LargeInt {
     pub fn new() -> LargeInt {
@@ -128,6 +144,60 @@ impl Sub for LargeInt {
 impl SubAssign for LargeInt {
     fn sub_assign(&mut self, other: LargeInt) {
         self.bytes = (self.clone() - other).bytes;
+    }
+}
+
+// impl Mul for LargeInt {
+//     type Output = LargeInt;
+
+//     fn mul(self, other: LargeInt) -> LargeInt {
+//         let n = self.bytes.len();
+//         let m = other.bytes.len();
+//         let mut result = LargeInt::new();
+
+//         result
+//     }
+// }
+
+// impl FromStr for LargeInt {
+//     type Err = ParseIntError;
+
+//     fn from_str(s: &str) -> Result<LargeInt, ParseIntError> {
+
+//         // read the string 38 characters at a time, since this is
+//         // the largest an i128 can be
+
+//     }
+// }
+
+impl Shr<usize> for LargeInt {
+    type Output = LargeInt;
+
+    fn shr(self, bits: usize) -> LargeInt {
+        let mut remaining = bits;
+        let mut result = self.clone();
+        let size = result.bytes.len();
+
+        // simply shift chunks right while required
+        while remaining > 128 {
+            for i in 1..size {
+                result.bytes[i - 1] = result.bytes[i];
+            }
+            result.bytes[size - 1] = 0;
+            remaining -= 128;
+        }
+
+        // shift the remainder
+        let mut result_mask = 0;
+        let data_mask = (1u128.checked_shl(remaining as u32).unwrap_or(0) as i128 - 1) as u128;
+        for i in (0..size).rev() {
+            let temp_mask = result.bytes[i] & data_mask;
+            result.bytes[i] = result.bytes[i].checked_shr(remaining as u32).unwrap_or(0);
+            result.bytes[i] |= result_mask;
+            result_mask = temp_mask.checked_shl(128 - remaining as u32).unwrap_or(0);
+        }
+        result.shrink();
+        result
     }
 }
 
@@ -269,6 +339,10 @@ mod tests {
         let li1 = LargeInt{bytes: vec!(3, 1, 1 << 126)};
         let li2 = LargeInt{bytes: vec!(u128::MAX ^ (3))}; // represents -4
         assert_eq!(li1 + li2, LargeInt{bytes: vec!(u128::MAX, 0, 1 << 126)});
+
+        let li1 = LargeInt{bytes: vec!(u128::MAX, 0)};
+        let li2 = LargeInt{bytes: vec!(u128::MAX, 0)};
+        assert_eq!(li1 + li2, LargeInt{bytes: vec!(u128::MAX - 1, 1)});
     }
 
     // tests for sub are minimal simply because it uses add
@@ -281,5 +355,28 @@ mod tests {
         let li1 = LargeInt{bytes: vec!(4)};
         let li2 = LargeInt{bytes: vec!(u128::MAX)};
         assert_eq!(li1 - li2, LargeInt{bytes: vec!(5)});
+    }
+
+    #[test]
+    fn test_shr() {
+
+        // test easy case
+        let li = LargeInt{bytes: vec!(3)};
+        assert_eq!(li >> 1, LargeInt{bytes: vec!(1)});
+
+        let li = LargeInt{bytes: vec!(u128::MAX)};
+        assert_eq!(li >> 128, LargeInt{bytes: vec!(0)});
+
+        let li = LargeInt{bytes: vec!(4, 3)};
+        assert_eq!(li >> 1, LargeInt{bytes: vec!((1 << 127) + 2, 1)});
+
+        let li = LargeInt{bytes: vec!(4, 3, 4)};
+        assert_eq!(li >> 2, LargeInt{bytes: vec!((3 << 126) + 1, 0, 1)});
+        let li = LargeInt{bytes: vec!(4, 3, 4)};
+        assert_eq!(li >> 3, LargeInt{bytes: vec!((3 << 125), 1 << 127, 0)});
+
+        // test large shifts
+        let li = LargeInt{bytes: vec!(4, 3, 4)};
+        assert_eq!(li >> 257, LargeInt{bytes: vec!(2)})
     }
 }
