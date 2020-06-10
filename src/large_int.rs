@@ -205,6 +205,12 @@ impl Shr<usize> for LargeInt {
     }
 }
 
+impl ShrAssign<usize> for LargeInt {
+    fn shr_assign(&mut self, bits: usize) {
+        self.bytes = (self.clone() >> bits).bytes;
+    }
+}
+
 impl Shl<usize> for LargeInt {
     type Output = LargeInt;
 
@@ -235,6 +241,12 @@ impl Shl<usize> for LargeInt {
         }
         result.shrink();
         result
+    }
+}
+
+impl ShlAssign<usize> for LargeInt {
+    fn shl_assign(&mut self, bits: usize) {
+        self.bytes = (self.clone() << bits).bytes;
     }
 }
 
