@@ -32,6 +32,22 @@ fn is_u128_negative(val: u128) -> bool {
     (val & SIGN_BIT) > 1
 }
 
+// fn add_ascii_chars(lhs: u8, rhs: u8) -> (u8, u8) {
+
+// }
+
+// fn add_string_ints(lhs: &str, rhs: &str) -> String {
+//     let str_rep = "".to_owned();
+//     let mut overflow = 48u8;
+//     let mut result;
+//     for i in (0..lhs.len().max(rhs.len())).rev() {
+//         if i >= lhs.len() {
+
+//         }
+//     }
+//     str_rep
+// }
+
 // fn multiply_string_int(rep: &mut String, by: i64) {
 
 // }
@@ -94,6 +110,13 @@ impl LargeInt {
         }
         compliment + 1
     }
+
+    // fn string_rep(&self) -> String {
+    //     let result = self.bytes[0].to_string();
+    //     let 
+
+    //     result
+    // }
 }
 
 impl Add for LargeInt {
@@ -250,16 +273,99 @@ impl ShlAssign<usize> for LargeInt {
     }
 }
 
-macro_rules! ops {
+macro_rules! from_unsigned {
     ( $($t:ident)* ) => {
         $(impl From<$t> for LargeInt {
             fn from(val: $t) -> LargeInt {
                 let mut bytes = Vec::new();
                 bytes.push(val as u128);
-                LargeInt{bytes: bytes}
+                bytes.push(0);
+                let mut result = LargeInt{bytes: bytes};
+                result.shrink();
+                result
             }
         })*
 
+        #[cfg(test)]
+        mod from_unsigned_tests {
+            use crate::large_int::{
+                LargeInt,
+                SIGN_BIT
+            };
+            
+            $(use std::$t;)*
+
+            #[test]
+            fn test_from_unsigned() {
+                let mut tested_u128 = false;
+                let mut tested_others = false;
+
+                $(let li = LargeInt::from(127 as $t);
+                assert_eq!(li.bytes[0], 127u128);
+                assert!(li.is_positive());
+
+                let li = LargeInt::from($t::MAX);
+                
+                // u128 needs a special case, since all other values will shrink
+                if li.bytes[0] == u128::MAX {
+                    assert_eq!(li, LargeInt{bytes: vec!(u128::MAX, 0)});
+                    tested_u128 = true;
+                } else {
+                    assert_eq!(li, LargeInt{bytes: vec!($t::MAX as u128)});
+                    tested_others = true;
+                }
+
+                assert!(!li.is_negative());)*
+
+                assert!(tested_others && tested_u128);
+            }
+        }
+    };
+}
+
+macro_rules! from_signed {
+    ( $($t:ident)* ) => {
+        $(impl From<$t> for LargeInt {
+            fn from(val: $t) -> LargeInt {
+                let mut bytes = Vec::new();
+                bytes.push(val as u128);
+                if val < 0 {
+                    bytes.push(u128::MAX);
+                } else {
+                    bytes.push(0);
+                }
+                let mut result = LargeInt{bytes: bytes};
+                result.shrink();
+                result
+            }
+        })*
+
+        #[cfg(test)]
+        mod from_signed_tests {
+            use crate::large_int::{
+                LargeInt,
+                SIGN_BIT
+            };
+            
+            use std::u128;
+
+            #[test]
+            fn test_from_signed() {
+                $(let li = LargeInt::from(127 as $t);
+                assert_eq!(li.bytes[0], 127u128);
+                assert!(li.is_positive());
+
+                let li = LargeInt::from(-1 as $t);
+                assert_eq!(li.bytes[0], u128::MAX); // 2's compliment rep of -1 is all 1s
+
+                assert!(li.is_negative());)*
+            }
+        }
+    };
+}
+
+macro_rules! ops {
+    ( $($t:ident)* ) => {
         $(impl Add<$t> for LargeInt {
             type Output = LargeInt;
 
@@ -268,9 +374,20 @@ macro_rules! ops {
                 self + oth
             }
         })*
+
+        $(impl Sub<$t> for LargeInt {
+            type Output = LargeInt;
+
+            fn sub(self, other: $t) -> LargeInt {
+                let oth = LargeInt::from(other);
+                self - oth
+            }
+        })*
     };
 }
 
+from_signed!(i8 i32 i64 i128 isize);
+from_unsigned!(u8 u32 u64 u128 usize);
 ops!(i8 i32 i64 i128 isize u8 u32 u64 u128 usize);
 
 #[cfg(test)]
@@ -281,18 +398,6 @@ mod tests {
     };
     
     use std::u128;
-
-    #[test]
-    fn test_from_i64() {
-        let li = LargeInt::from(257i64);
-        assert_eq!(li.bytes[0], 257u128);
-        assert!(li.is_positive());
-
-        let li = LargeInt::from(-1i64);
-        assert_eq!(li.bytes[0], u128::MAX); // 2's compliment rep of -1 is all 1s
-
-        assert!(li.is_negative());
-    }
 
     #[test]
     fn test_is_negative() {
