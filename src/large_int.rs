@@ -13,7 +13,11 @@ use std::ops::{
     Shr,
     ShrAssign,
     Shl,
-    ShlAssign
+    ShlAssign,
+    BitAnd,
+    BitAndAssign,
+    BitOr,
+    BitOrAssign
 };
 
 // store a vector of little-endian, 2's compliment figures
@@ -51,8 +55,6 @@ fn is_u128_negative(val: u128) -> bool {
 // fn multiply_string_int(rep: &mut String, by: i64) {
 
 // }
-
-// fn multiply_u128_with_overflow()
 
 impl LargeInt {
     pub fn new() -> LargeInt {
@@ -111,6 +113,62 @@ impl LargeInt {
         compliment + 1
     }
 
+    fn shr_no_shrink(self, bits: usize) -> LargeInt {
+        let mut remaining = bits;
+        let mut result = self.clone();
+        let size = result.bytes.len();
+
+        // simply shift chunks right while required
+        while remaining > 128 {
+            for i in 1..size {
+                result.bytes[i - 1] = result.bytes[i];
+            }
+            result.bytes[size - 1] = 0;
+            remaining -= 128;
+        }
+
+        // shift the remainder
+        let mut result_mask = 0;
+        let data_mask = (
+            1u128.checked_shl(remaining as u32).unwrap_or(0) as i128 - 1
+        ) as u128;
+        for i in (0..size).rev() {
+            let temp_mask = result.bytes[i] & data_mask;
+            result.bytes[i] = result.bytes[i].checked_shr(remaining as u32).unwrap_or(0);
+            result.bytes[i] |= result_mask;
+            result_mask = temp_mask.checked_shl(128 - remaining as u32).unwrap_or(0);
+        }
+        result
+    }
+
+    fn shl_no_shrink(self, bits: usize) -> LargeInt {
+        let mut remaining = bits;
+        let mut result = self.clone();
+        let size = result.bytes.len();
+
+        // shift chunks left while required
+        while remaining > 128 {
+            for i in (1..size).rev() {
+                result.bytes[i] = result.bytes[i - 1];
+            }
+            result.bytes[0] = 0;
+            remaining -= 128;
+        }
+
+        // shift the remainder
+        let mut result_mask = 0;
+        let data_mask = (
+            u128::MAX.checked_shl(128 - remaining as u32).unwrap_or(0) as i128
+        ) as u128;
+        for i in 0..size {
+            let temp_mask = result.bytes[i] & data_mask;
+            result.bytes[i] = result.bytes[i].checked_shl(remaining as u32).unwrap_or(0);
+            result.bytes[i] |= result_mask;
+            result_mask = temp_mask.checked_shr(128 - remaining as u32).unwrap_or(0);
+        }
+        result
+    }
+
     // fn string_rep(&self) -> String {
     //     let result = self.bytes[0].to_string();
     //     let 
@@ -160,7 +218,7 @@ impl AddAssign for LargeInt {
 impl Sub for LargeInt {
     type Output = LargeInt;
 
-    // use the implmentation of addition for subtraction
+    // use the implementation of addition for subtraction
     fn sub(self, other: LargeInt) -> LargeInt {
         self + other.compliment()
     }
@@ -172,17 +230,36 @@ impl SubAssign for LargeInt {
     }
 }
 
-// impl Mul for LargeInt {
-//     type Output = LargeInt;
+impl Mul for LargeInt {
+    type Output = LargeInt;
 
-//     fn mul(self, other: LargeInt) -> LargeInt {
-//         let n = self.bytes.len();
-//         let m = other.bytes.len();
-//         let mut result = LargeInt::new();
+    // based off information found here:
+    // https://en.wikipedia.org/wiki/Two%27s_complement#Multiplication
+    fn mul(self, mut other: LargeInt) -> LargeInt {
+        let n = self.bytes.len();
+        let m = other.bytes.len();
+        let size = n.max(m) * 2;
+        other.expand_to(size);
+        let zero = LargeInt::from(0);
+        let mut result = LargeInt::with_size(size);
+        let mut mask = LargeInt::from(1);
+        mask.expand_to(n);
 
-//         result
-//     }
-// }
+        for i in 0..(128 * n) {
+            if self.clone() & mask.clone() != zero {
+                result += other.clone() << i;
+            }
+            mask = mask.shl_no_shrink(1);
+        }
+        result
+    }
+}
+
+impl MulAssign for LargeInt {
+    fn mul_assign(&mut self, rhs: LargeInt) {
+        self.bytes = (self.clone() * rhs).bytes;
+    }
+}
 
 // impl FromStr for LargeInt {
 //     type Err = ParseIntError;
@@ -195,34 +272,45 @@ impl SubAssign for LargeInt {
 //     }
 // }
 
+impl BitAnd for LargeInt {
+    type Output = LargeInt;
+
+    fn bitand(mut self, mut rhs: LargeInt) -> LargeInt {
+        let size = self.bytes.len().max(rhs.bytes.len());
+        let mut result = LargeInt::with_size(size);
+        self.expand_to(size);
+        rhs.expand_to(size);
+
+        for i in 0..size {
+            result.bytes[i] = self.bytes[i] & rhs.bytes[i];
+        }
+        result.shrink();
+        result
+    }
+}
+
+impl BitOr for LargeInt {
+    type Output = LargeInt;
+
+    fn bitor(mut self, mut rhs: LargeInt) -> LargeInt {
+        let size = self.bytes.len().max(rhs.bytes.len());
+        let mut result = LargeInt::with_size(size);
+        self.expand_to(size);
+        rhs.expand_to(size);
+
+        for i in 0..size {
+            result.bytes[i] = self.bytes[i] | rhs.bytes[i];
+        }
+        result.shrink();
+        result
+    }
+}
+
 impl Shr<usize> for LargeInt {
     type Output = LargeInt;
 
     fn shr(self, bits: usize) -> LargeInt {
-        let mut remaining = bits;
-        let mut result = self.clone();
-        let size = result.bytes.len();
-
-        // simply shift chunks right while required
-        while remaining > 128 {
-            for i in 1..size {
-                result.bytes[i - 1] = result.bytes[i];
-            }
-            result.bytes[size - 1] = 0;
-            remaining -= 128;
-        }
-
-        // shift the remainder
-        let mut result_mask = 0;
-        let data_mask = (
-            1u128.checked_shl(remaining as u32).unwrap_or(0) as i128 - 1
-        ) as u128;
-        for i in (0..size).rev() {
-            let temp_mask = result.bytes[i] & data_mask;
-            result.bytes[i] = result.bytes[i].checked_shr(remaining as u32).unwrap_or(0);
-            result.bytes[i] |= result_mask;
-            result_mask = temp_mask.checked_shl(128 - remaining as u32).unwrap_or(0);
-        }
+        let mut result = self.shr_no_shrink(bits);
         result.shrink();
         result
     }
@@ -238,30 +326,7 @@ impl Shl<usize> for LargeInt {
     type Output = LargeInt;
 
     fn shl(self, bits: usize) -> LargeInt {
-        let mut remaining = bits;
-        let mut result = self.clone();
-        let size = result.bytes.len();
-
-        // shift chunks left while required
-        while remaining > 128 {
-            for i in (1..size).rev() {
-                result.bytes[i] = result.bytes[i - 1];
-            }
-            result.bytes[0] = 0;
-            remaining -= 128;
-        }
-
-        // shift the remainder
-        let mut result_mask = 0;
-        let data_mask = (
-            u128::MAX.checked_shl(128 - remaining as u32).unwrap_or(0) as i128
-        ) as u128;
-        for i in 0..size {
-            let temp_mask = result.bytes[i] & data_mask;
-            result.bytes[i] = result.bytes[i].checked_shl(remaining as u32).unwrap_or(0);
-            result.bytes[i] |= result_mask;
-            result_mask = temp_mask.checked_shr(128 - remaining as u32).unwrap_or(0);
-        }
+        let mut result = self.shl_no_shrink(bits);
         result.shrink();
         result
     }
@@ -375,12 +440,24 @@ macro_rules! ops {
             }
         })*
 
+        $(impl AddAssign<$t> for LargeInt {
+            fn add_assign(&mut self, other: $t) {
+                self.bytes = (self.clone() + other).bytes;
+            }
+        })*
+
         $(impl Sub<$t> for LargeInt {
             type Output = LargeInt;
 
             fn sub(self, other: $t) -> LargeInt {
                 let oth = LargeInt::from(other);
                 self - oth
+            }
+        })*
+
+        $(impl SubAssign<$t> for LargeInt {
+            fn sub_assign(&mut self, other: $t) {
+                self.bytes = (self.clone() - other).bytes;
             }
         })*
     };
@@ -502,6 +579,16 @@ mod tests {
         let li1 = LargeInt{bytes: vec!(u128::MAX, 0)};
         let li2 = LargeInt{bytes: vec!(u128::MAX, 0)};
         assert_eq!(li1 + li2, LargeInt{bytes: vec!(u128::MAX - 1, 1)});
+
+        // test AddAssign trait too
+        let mut li1 = LargeInt{bytes: vec!(2)};
+        let li2 = LargeInt{bytes: vec!(5)};
+        li1 += li2;
+        assert_eq!(li1, LargeInt{bytes: vec!(7)});
+
+        let mut li1 = LargeInt{bytes: vec!(u128::MAX - 3)};
+        li1 += 6;
+        assert_eq!(li1, LargeInt{bytes: vec!(2)});
     }
 
     // tests for sub are minimal simply because it uses add
@@ -514,6 +601,15 @@ mod tests {
         let li1 = LargeInt{bytes: vec!(4)};
         let li2 = LargeInt{bytes: vec!(u128::MAX)};
         assert_eq!(li1 - li2, LargeInt{bytes: vec!(5)});
+
+        let mut li1 = LargeInt{bytes: vec!(10)};
+        let li2 = LargeInt{bytes: vec!(u128::MAX)};
+        li1 -= li2;
+        assert_eq!(li1, LargeInt{bytes: vec!(11)});
+
+        let mut li1 = LargeInt{bytes: vec!(u128::MAX - 4)};
+        li1 -= 10;
+        assert_eq!(li1, LargeInt{bytes: vec!(u128::MAX - 14)});
     }
 
     #[test]
@@ -536,7 +632,11 @@ mod tests {
 
         // test large shifts
         let li = LargeInt{bytes: vec!(4, 3, 4)};
-        assert_eq!(li >> 257, LargeInt{bytes: vec!(2)})
+        assert_eq!(li >> 257, LargeInt{bytes: vec!(2)});
+
+        // test shift with 0 as arg
+        let li = LargeInt{bytes: vec!(4, 3, 4)};
+        assert_eq!(li >> 0, LargeInt{bytes: vec!(4, 3, 4)});
     }
 
     #[test]
@@ -550,7 +650,7 @@ mod tests {
         assert_eq!(li << 1, LargeInt{bytes: vec!(0, 6)});
 
         let li = LargeInt{bytes: vec!(u128::MAX)};
-        assert_eq!(li << 1, LargeInt{bytes: vec!(u128::MAX - 1)});
+        assert_eq!(li << 2, LargeInt{bytes: vec!(u128::MAX - 3)});
 
         let li = LargeInt{bytes: vec!(1 << 127)};
         assert_eq!(li << 1, LargeInt{bytes: vec!(0)});
@@ -560,5 +660,76 @@ mod tests {
 
         let li = LargeInt{bytes: vec!(1, 2, 3)};
         assert_eq!(li << 257, LargeInt{bytes: vec!(0, 0, 2)});
+
+        let li = LargeInt{bytes: vec!(1, 2, 3)};
+        assert_eq!(li << 0, LargeInt{bytes: vec!(1, 2, 3)});
+
+        let li = LargeInt{bytes: vec!(1, 2, 3)};
+        assert_eq!(li << 130, LargeInt{bytes: vec!(0, 4, 8)});
+    }
+
+    #[test]
+    fn test_mul() {
+        let li1 = LargeInt{bytes: vec!(3)};
+        let li2 = LargeInt{bytes: vec!(2)};
+        assert_eq!(li1 * li2, LargeInt{bytes: vec!(6)});
+
+        let li1 = LargeInt{bytes: vec!(3)};
+        let li2 = LargeInt{bytes: vec!(u128::MAX)};
+        assert_eq!(li1 * li2, LargeInt{bytes: vec!(u128::MAX - 2)});
+
+        let li1 = LargeInt{bytes: vec!(3)};
+        let li2 = LargeInt{bytes: vec!(0)};
+        assert_eq!(li1 * li2, LargeInt{bytes: vec!(0)});
+
+        let li1 = LargeInt{bytes: vec!(1u128 << 127)};
+        let li2 = LargeInt{bytes: vec!(2)};
+        assert_eq!(li1 * li2, LargeInt{bytes: vec!(0, 1)});
+
+        // check if both orders work the same
+        let li2 = LargeInt{bytes: vec!(1u128 << 127, 1)};
+        let li1 = LargeInt{bytes: vec!(2)};
+        assert_eq!(li1 * li2, LargeInt{bytes: vec!(0, 3)});
+        let li1 = LargeInt{bytes: vec!(1u128 << 127, 1)};
+        let li2 = LargeInt{bytes: vec!(2)};
+        assert_eq!(li1 * li2, LargeInt{bytes: vec!(0, 3)});
+    }
+
+    #[test]
+    fn test_bitand() {
+        let li1 = LargeInt{bytes: vec!(3)};
+        let li2 = LargeInt{bytes: vec!(1)};
+        assert_eq!(li1 & li2, LargeInt{bytes: vec!(1)});
+
+        let li1 = LargeInt{bytes: vec!(3, 4)};
+        let li2 = LargeInt{bytes: vec!(1)};
+        assert_eq!(li1 & li2, LargeInt{bytes: vec!(1)});
+
+        let li1 = LargeInt{bytes: vec!(3, 4)};
+        let li2 = LargeInt{bytes: vec!(1, 2)};
+        assert_eq!(li1 & li2, LargeInt{bytes: vec!(1)});
+
+        let li1 = LargeInt{bytes: vec!(3, 5)};
+        let li2 = LargeInt{bytes: vec!(1, 4)};
+        assert_eq!(li1 & li2, LargeInt{bytes: vec!(1, 4)});
+    }
+
+    #[test]
+    fn test_bitor() {
+        let li1 = LargeInt{bytes: vec!(3)};
+        let li2 = LargeInt{bytes: vec!(1)};
+        assert_eq!(li1 | li2, LargeInt{bytes: vec!(3)});
+
+        let li1 = LargeInt{bytes: vec!(3, 4)};
+        let li2 = LargeInt{bytes: vec!(1)};
+        assert_eq!(li1 | li2, LargeInt{bytes: vec!(3, 4)});
+
+        let li1 = LargeInt{bytes: vec!(3, 4)};
+        let li2 = LargeInt{bytes: vec!(1, 2)};
+        assert_eq!(li1 | li2, LargeInt{bytes: vec!(3, 6)});
+
+        let li1 = LargeInt{bytes: vec!(3, 5)};
+        let li2 = LargeInt{bytes: vec!(1, 4)};
+        assert_eq!(li1 | li2, LargeInt{bytes: vec!(3, 5)});
     }
 }
