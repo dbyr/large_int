@@ -2,6 +2,11 @@ use std::u128;
 use std::str::FromStr;
 use std::cmp::Ordering;
 use std::num::ParseIntError;
+use std::fmt::{
+    Display,
+    Formatter,
+    Result as FmtResult
+};
 use std::ops::{
     Add,
     AddAssign,
@@ -42,26 +47,6 @@ const SIGN_BIT: u128 = 1u128 << 127;
 fn is_u128_negative(val: u128) -> bool {
     (val & SIGN_BIT) > 1
 }
-
-// fn add_ascii_chars(lhs: u8, rhs: u8) -> (u8, u8) {
-
-// }
-
-// fn add_string_ints(lhs: &str, rhs: &str) -> String {
-//     let str_rep = "".to_owned();
-//     let mut overflow = 48u8;
-//     let mut result;
-//     for i in (0..lhs.len().max(rhs.len())).rev() {
-//         if i >= lhs.len() {
-
-//         }
-//     }
-//     str_rep
-// }
-
-// fn multiply_string_int(rep: &mut String, by: i64) {
-
-// }
 
 impl LargeInt {
     pub fn new() -> LargeInt {
@@ -218,13 +203,6 @@ impl LargeInt {
         result.shrink();
         (result, remainder)
     }
-
-    // fn string_rep(&self) -> String {
-    //     let result = self.bytes[0].to_string();
-    //     let 
-
-    //     result
-    // }
 }
 
 impl Add for LargeInt {
@@ -340,17 +318,6 @@ impl RemAssign for LargeInt {
         self.bytes = (self.clone() % other).bytes;
     }
 }
-
-// impl FromStr for LargeInt {
-//     type Err = ParseIntError;
-
-//     fn from_str(s: &str) -> Result<LargeInt, ParseIntError> {
-
-//         // read the string 38 characters at a time, since this is
-//         // the largest an i128 can be
-
-//     }
-// }
 
 impl BitAnd for LargeInt {
     type Output = LargeInt;
@@ -482,6 +449,75 @@ impl PartialOrd for LargeInt {
         } else {
             Some(Ordering::Greater)
         }
+    }
+}
+
+impl FromStr for LargeInt {
+    type Err = ParseIntError;
+
+    fn from_str(s: &str) -> Result<LargeInt, ParseIntError> {
+        let mut weight = LargeInt::from(1);
+        let mut negative = false;
+        let mut result = LargeInt::from(0);
+        let inc_fin = if &s[..=0] == "-" {
+            negative = true;
+            1
+        } else {
+            0
+        };
+
+        // calculate value based off sum of digits * weight
+        // (eg, 123 = 1 * 10^2 + 2 * 10^1 + 3 * 10^0)
+        for i in (inc_fin..s.len()).rev() {
+            let digit = u8::from_str(&s[i..=i])?;
+            result += weight.clone() * digit;
+            weight *= 10;
+        }
+        if negative {
+            result = result.compliment();
+        }
+        Ok(result)
+    }
+}
+
+impl Display for LargeInt {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        let mut result = String::new();
+        let mut num = self.clone();
+        let mut divisor = LargeInt::from(1);
+        let zero = LargeInt::from(0);
+        if num.is_negative() {
+            result.push('-');
+            num = num.compliment();
+        }
+
+        // find the largest divisor
+        while divisor < num {
+            divisor *= 10;
+            println!("divisor = {:?}", divisor);
+        }
+        println!("num = {:?}", num);
+        divisor /= 10; // re-adjust
+
+        // now calculate the digit at each position
+        while divisor != zero {
+            let digit = num.clone() / divisor.clone();
+            println!("digit = {}", digit.bytes[0]);
+            println!("digit.len() = {}", digit.bytes.len());
+            println!("divisor = {:?}", divisor);
+            result.push_str(&digit.bytes[0].to_string()); // should rep. whole number
+            num -= digit * divisor.clone();
+            divisor /= 10;
+        }
+
+        // these cases need to be handled specially because of the
+        // two's complement problem
+        if result == "" {
+            result.push('0');
+        } else if result == "-" {
+            result.push('1');
+        }
+        write!(f, "{}", result)
     }
 }
 
@@ -632,7 +668,7 @@ macro_rules! ops {
 
         $(impl DivAssign<$t> for LargeInt {
             fn div_assign(&mut self, other: $t) {
-                self.bytes = (self.clone() * other).bytes;
+                self.bytes = (self.clone() / other).bytes;
             }
         })*
     };
@@ -644,6 +680,8 @@ ops!(i8 i32 i64 i128 isize u8 u32 u64 u128 usize);
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+    use std::string::ToString;
     use crate::large_int::{
         LargeInt,
         SIGN_BIT
@@ -872,6 +910,10 @@ mod tests {
         let li1 = LargeInt{bytes: vec!(1u128 << 126)};
         let li2 = li1.clone();
         assert_eq!(li1 * li2, LargeInt{bytes: vec!(1, 0)} << 252);
+
+        let mut li1 = LargeInt{bytes: vec!(10)};
+        li1 *= 10;
+        assert_eq!(li1, LargeInt::from(100));
     }
 
     #[test]
@@ -909,6 +951,31 @@ mod tests {
         let li1 = LargeInt::from(10);
         let li2 = LargeInt::from(20);
         assert_eq!(li1 / li2, LargeInt::from(0));
+
+        let li1 = LargeInt::from(1);
+        let li2 = LargeInt::from(10);
+        assert_eq!(li1 / li2, LargeInt::from(0));
+
+        let li1 = LargeInt::from(100);
+        let li2 = LargeInt::from(10);
+        assert_eq!(li1 / li2, LargeInt::from(10));
+
+        let mut li1 = LargeInt::from(100);
+        li1 /= 10;
+        assert_eq!(li1, LargeInt::from(10));
+
+        let li1 = LargeInt::from_str("340282366920938463463374607431768211465").unwrap();
+        let li2 = LargeInt::from_str("100000000000000000000000000000000000000").unwrap();
+        assert_eq!(li1 / li2, LargeInt::from(3));
+    }
+
+    #[test]
+    #[should_panic(expected = "Attempted divide by 0")]
+    fn test_div_by_0() {
+        let li1 = LargeInt::from(42);
+        let mut val = li1 / 0;
+        assert!(false);
+        val *= 10; // just to get rid of the "unused" warning...
     }
 
     #[test]
@@ -1030,5 +1097,90 @@ mod tests {
 
         let li1 = LargeInt{bytes: vec!(1, 2, 3)};
         assert_eq!(!li1, LargeInt::from(0));
+    }
+
+    #[test]
+    fn test_from_string() {
+        let li1 = LargeInt::from_str("0").unwrap();
+        let li2 = LargeInt::from(0);
+        assert_eq!(li1, li2);
+        let li1 = LargeInt::from_str("-1").unwrap();
+        let li2 = LargeInt::from(-1);
+        assert_eq!(li1, li2);
+
+        let li1 = LargeInt::from_str("5").unwrap();
+        let li2 = LargeInt::from(5);
+        assert_eq!(li1, li2);
+
+        let li1 = LargeInt::from_str("-5").unwrap();
+        let li2 = LargeInt::from(-5);
+        assert_eq!(li1, li2);
+
+        let li1 = LargeInt::from_str("531").unwrap();
+        let li2 = LargeInt::from(531);
+        assert_eq!(li1, li2);
+
+        let li1 = LargeInt::from_str("-531").unwrap();
+        let li2 = LargeInt::from(-531);
+        assert_eq!(li1, li2);
+
+        // max u128 is 340282366920938463463374607431768211455
+        let li1 = LargeInt::from_str("340282366920938463463374607431768211456").unwrap();
+        let li2 = LargeInt{bytes: vec!(0, 1)};
+        assert_eq!(li1, li2);
+        let li1 = LargeInt::from_str("-340282366920938463463374607431768211456").unwrap();
+        let li2 = LargeInt{bytes: vec!(0, 1)}.compliment();
+        assert_eq!(li1, li2);
+
+        let li1 = LargeInt::from_str("340282366920938463463374607431768211458").unwrap();
+        let li2 = LargeInt{bytes: vec!(2, 1)};
+        assert_eq!(li1, li2);
+        let li1 = LargeInt::from_str("-340282366920938463463374607431768211458").unwrap();
+        let li2 = LargeInt{bytes: vec!(2, 1)}.compliment();
+        assert_eq!(li1, li2);
+
+        let li1 = LargeInt::from_str("123abc");
+        match li1 {
+            Ok(_) => assert!(false),
+            Err(_) => assert!(true)
+        }
+    }
+
+    #[test]
+    fn test_to_string() {
+        // let li1 = LargeInt::from(0).to_string();
+        // let li2 = "0";
+        // assert_eq!(li1, li2);
+        // let li1 = LargeInt::from(-1).to_string();
+        // let li2 = "-1";
+        // assert_eq!(li1, li2);
+
+        // let li1 = LargeInt::from(5).to_string();
+        // let li2 = "5";
+        // assert_eq!(li1, li2);
+
+        // let li1 = LargeInt::from(-5).to_string();
+        // let li2 = "-5";
+        // assert_eq!(li1, li2);
+
+        // let li1 = LargeInt::from(531).to_string();
+        // let li2 = "531";
+        // assert_eq!(li1, li2);
+
+        // let li1 = LargeInt::from(-531).to_string();
+        // let li2 = "-531";
+        // assert_eq!(li1, li2);
+
+        let li1 = (LargeInt::from(u128::MAX) + 10u8).to_string();
+        let li2 = "340282366920938463463374607431768211465";
+        assert_eq!(li1, li2);
+        // let li1 = (LargeInt::from(u128::MAX) + 2u8).compliment().to_string();
+        // let li2 = "-340282366920938463463374607431768211457";
+        // assert_eq!(li1, li2);
+
+        // let li1 = (LargeInt{bytes: vec!(319435266158123073073250785136463577088, 2)}).to_string();
+        // let li2 = "1000000000000000000000000000000000000000";
+        //            340282366920938463463374607431768211465
+        // assert_eq!(li1, li2);
     }
 }
