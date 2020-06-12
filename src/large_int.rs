@@ -953,6 +953,10 @@ mod internal_tests {
         let li1 = LargeInt::from_str("340282366920938463463374607431768211465").unwrap();
         let li2 = LargeInt::from_str("100000000000000000000000000000000000000").unwrap();
         assert_eq!(li1 / li2, LargeInt::from(3));
+
+        let li1 = LargeInt::from_str("-340282366920938463463374607431768211465").unwrap();
+        let li2 = LargeInt::from_str("-100000000000000000000000000000000000000").unwrap();
+        assert_eq!(li1 / li2, LargeInt::from(3));
     }
 
     #[test]
