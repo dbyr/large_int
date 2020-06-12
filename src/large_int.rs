@@ -96,6 +96,14 @@ impl LargeInt {
         }
     }
 
+    // for use when maintaining sign is undesirable
+    // (e.g. for masks)
+    fn expand_to_ignore_sign(&mut self, size: usize) {
+        while self.bytes.len() < size {
+            self.bytes.push(0);
+        }
+    }
+
     fn compliment(&self) -> LargeInt {
         let size = self.bytes.len();
         let mut compliment = LargeInt::with_size(size);
@@ -105,62 +113,8 @@ impl LargeInt {
         compliment + 1
     }
 
-    fn shr_no_shrink(self, bits: usize) -> LargeInt {
-        let mut remaining = bits;
-        let mut result = self.clone();
-        let size = result.bytes.len();
-
-        // simply shift chunks right while required
-        while remaining > 128 {
-            for i in 1..size {
-                result.bytes[i - 1] = result.bytes[i];
-            }
-            result.bytes[size - 1] = 0;
-            remaining -= 128;
-        }
-
-        // shift the remainder
-        let mut result_mask = 0;
-        let data_mask = (
-            1u128.checked_shl(remaining as u32).unwrap_or(0) as i128 - 1
-        ) as u128;
-        for i in (0..size).rev() {
-            let temp_mask = result.bytes[i] & data_mask;
-            result.bytes[i] = result.bytes[i].checked_shr(remaining as u32).unwrap_or(0);
-            result.bytes[i] |= result_mask;
-            result_mask = temp_mask.checked_shl(128 - remaining as u32).unwrap_or(0);
-        }
-        result
-    }
-
-    fn shl_no_shrink(self, bits: usize) -> LargeInt {
-        let mut remaining = bits;
-        let mut result = self.clone();
-        let size = result.bytes.len();
-
-        // shift chunks left while required
-        while remaining > 128 {
-            for i in (1..size).rev() {
-                result.bytes[i] = result.bytes[i - 1];
-            }
-            result.bytes[0] = 0;
-            remaining -= 128;
-        }
-
-        // shift the remainder
-        let mut result_mask = 0;
-        let data_mask = (
-            u128::MAX.checked_shl(128 - remaining as u32).unwrap_or(0) as i128
-        ) as u128;
-        for i in 0..size {
-            let temp_mask = result.bytes[i] & data_mask;
-            result.bytes[i] = result.bytes[i].checked_shl(remaining as u32).unwrap_or(0);
-            result.bytes[i] |= result_mask;
-            result_mask = temp_mask.checked_shr(128 - remaining as u32).unwrap_or(0);
-        }
-        result
-    }
-
+    // adapted from psuedo code here:
+    // https://en.wikipedia.org/wiki/Division_algorithm#Long_division
     fn div_with_remainder(mut self, mut other: LargeInt) -> (LargeInt, LargeInt) {
         let zero = LargeInt::from(0);
         if other == zero {
@@ -181,10 +135,9 @@ impl LargeInt {
         // perform the division
         let size = self.bytes.len();
         let mut result = LargeInt::with_size(size);
-        let mut remainder = LargeInt::from(0);
+        let mut remainder = LargeInt::with_size(size + 1);
         let mut mask = LargeInt::from(1);
-        remainder.expand_to(size);
-        mask.expand_to(size);
+        mask.expand_to_ignore_sign(size);
         mask <<= (size * 128) - 1;
         for _ in 0..(size * 128) {
             remainder <<= 1;
@@ -195,12 +148,14 @@ impl LargeInt {
                 remainder -= other.clone();
                 result |= mask.clone();
             }
+            remainder.expand_to_ignore_sign(size + 1);
             mask >>= 1;
         }
         if negative {
             result = result.compliment();
         }
         result.shrink();
+        remainder.shrink();
         (result, remainder)
     }
 }
@@ -271,14 +226,15 @@ impl Mul for LargeInt {
         let zero = LargeInt::from(0);
         let mut result = LargeInt::with_size(size);
         let mut mask = LargeInt::from(1);
-        mask.expand_to(n);
+        mask.expand_to_ignore_sign(n);
 
         for i in 0..(128 * n) {
             if self.clone() & mask.clone() != zero {
                 result += other.clone() << i;
             }
-            mask = mask.shl_no_shrink(1);
+            mask <<= 1;
         }
+        result.shrink();
         result
     }
 }
@@ -292,8 +248,6 @@ impl MulAssign for LargeInt {
 impl Div for LargeInt {
     type Output = LargeInt;
 
-    // adapted from psuedo code here:
-    // https://en.wikipedia.org/wiki/Division_algorithm#Long_division
     fn div(self, other: LargeInt) -> LargeInt {
         self.div_with_remainder(other).0
     }
@@ -325,8 +279,8 @@ impl BitAnd for LargeInt {
     fn bitand(mut self, mut rhs: LargeInt) -> LargeInt {
         let size = self.bytes.len().max(rhs.bytes.len());
         let mut result = LargeInt::with_size(size);
-        self.expand_to(size);
-        rhs.expand_to(size);
+        self.expand_to_ignore_sign(size);
+        rhs.expand_to_ignore_sign(size);
 
         for i in 0..size {
             result.bytes[i] = self.bytes[i] & rhs.bytes[i];
@@ -348,8 +302,8 @@ impl BitOr for LargeInt {
     fn bitor(mut self, mut rhs: LargeInt) -> LargeInt {
         let size = self.bytes.len().max(rhs.bytes.len());
         let mut result = LargeInt::with_size(size);
-        self.expand_to(size);
-        rhs.expand_to(size);
+        self.expand_to_ignore_sign(size);
+        rhs.expand_to_ignore_sign(size);
 
         for i in 0..size {
             result.bytes[i] = self.bytes[i] | rhs.bytes[i];
@@ -369,8 +323,30 @@ impl Shr<usize> for LargeInt {
     type Output = LargeInt;
 
     fn shr(self, bits: usize) -> LargeInt {
-        let mut result = self.shr_no_shrink(bits);
-        result.shrink();
+        let mut remaining = bits;
+        let mut result = self.clone();
+        let size = result.bytes.len();
+
+        // simply shift chunks right while required
+        while remaining > 128 {
+            for i in 1..size {
+                result.bytes[i - 1] = result.bytes[i];
+            }
+            result.bytes[size - 1] = 0;
+            remaining -= 128;
+        }
+
+        // shift the remainder
+        let mut result_mask = 0;
+        let data_mask = (
+            1u128.checked_shl(remaining as u32).unwrap_or(0) as i128 - 1
+        ) as u128;
+        for i in (0..size).rev() {
+            let temp_mask = result.bytes[i] & data_mask;
+            result.bytes[i] = result.bytes[i].checked_shr(remaining as u32).unwrap_or(0);
+            result.bytes[i] |= result_mask;
+            result_mask = temp_mask.checked_shl(128 - remaining as u32).unwrap_or(0);
+        }
         result
     }
 }
@@ -385,8 +361,30 @@ impl Shl<usize> for LargeInt {
     type Output = LargeInt;
 
     fn shl(self, bits: usize) -> LargeInt {
-        let mut result = self.shl_no_shrink(bits);
-        result.shrink();
+        let mut remaining = bits;
+        let mut result = self.clone();
+        let size = result.bytes.len();
+
+        // shift chunks left while required
+        while remaining > 128 {
+            for i in (1..size).rev() {
+                result.bytes[i] = result.bytes[i - 1];
+            }
+            result.bytes[0] = 0;
+            remaining -= 128;
+        }
+
+        // shift the remainder
+        let mut result_mask = 0;
+        let data_mask = (
+            u128::MAX.checked_shl(128 - remaining as u32).unwrap_or(0) as i128
+        ) as u128;
+        for i in 0..size {
+            let temp_mask = result.bytes[i] & data_mask;
+            result.bytes[i] = result.bytes[i].checked_shl(remaining as u32).unwrap_or(0);
+            result.bytes[i] |= result_mask;
+            result_mask = temp_mask.checked_shr(128 - remaining as u32).unwrap_or(0);
+        }
         result
     }
 }
@@ -411,8 +409,8 @@ impl BitXor for LargeInt {
     fn bitxor(mut self, mut other: LargeInt) -> LargeInt {
         let size = self.bytes.len().max(other.bytes.len());
         let mut result = LargeInt::with_size(size);
-        self.expand_to(size);
-        other.expand_to(size);
+        self.expand_to_ignore_sign(size);
+        other.expand_to_ignore_sign(size);
         for i in 0..size {
             result.bytes[i] = self.bytes[i] ^ other.bytes[i];
         }
@@ -494,17 +492,17 @@ impl Display for LargeInt {
         // find the largest divisor
         while divisor < num {
             divisor *= 10;
-            println!("divisor = {:?}", divisor);
+            // println!("divisor = {:?}", divisor);
         }
-        println!("num = {:?}", num);
+        // println!("num = {:?}", num);
         divisor /= 10; // re-adjust
 
         // now calculate the digit at each position
         while divisor != zero {
             let digit = num.clone() / divisor.clone();
-            println!("digit = {}", digit.bytes[0]);
-            println!("digit.len() = {}", digit.bytes.len());
-            println!("divisor = {:?}", divisor);
+            // println!("digit = {}", digit.bytes[0]);
+            // println!("digit.len() = {}", digit.bytes.len());
+            // println!("divisor = {:?}", divisor);
             result.push_str(&digit.bytes[0].to_string()); // should rep. whole number
             num -= digit * divisor.clone();
             divisor /= 10;
@@ -667,7 +665,7 @@ ops!(
 );
 
 #[cfg(test)]
-mod tests {
+mod internal_tests {
     use std::str::FromStr;
     use std::string::ToString;
     use crate::large_int::{
@@ -833,7 +831,7 @@ mod tests {
 
         // test large shifts
         let li = LargeInt{bytes: vec!(4, 3, 4)};
-        assert_eq!(li >> 257, LargeInt{bytes: vec!(2)});
+        assert_eq!(li >> 257, LargeInt{bytes: vec!(2, 0, 0)});
 
         // test shift with 0 as arg
         let li = LargeInt{bytes: vec!(4, 3, 4)};
@@ -1127,6 +1125,10 @@ mod tests {
         let li2 = LargeInt{bytes: vec!(2, 1)}.compliment();
         assert_eq!(li1, li2);
 
+        let li1 = LargeInt::from_str("340282366920938463463374607431768211465").unwrap();
+        let li2 = LargeInt{bytes: vec!(9, 1)};
+        assert_eq!(li1, li2);
+
         let li1 = LargeInt::from_str("123abc");
         match li1 {
             Ok(_) => assert!(false),
@@ -1136,39 +1138,38 @@ mod tests {
 
     #[test]
     fn test_to_string() {
-        // let li1 = LargeInt::from(0).to_string();
-        // let li2 = "0";
-        // assert_eq!(li1, li2);
-        // let li1 = LargeInt::from(-1).to_string();
-        // let li2 = "-1";
-        // assert_eq!(li1, li2);
+        let li1 = LargeInt::from(0).to_string();
+        let li2 = "0";
+        assert_eq!(li1, li2);
+        let li1 = LargeInt::from(-1).to_string();
+        let li2 = "-1";
+        assert_eq!(li1, li2);
 
-        // let li1 = LargeInt::from(5).to_string();
-        // let li2 = "5";
-        // assert_eq!(li1, li2);
+        let li1 = LargeInt::from(5).to_string();
+        let li2 = "5";
+        assert_eq!(li1, li2);
 
-        // let li1 = LargeInt::from(-5).to_string();
-        // let li2 = "-5";
-        // assert_eq!(li1, li2);
+        let li1 = LargeInt::from(-5).to_string();
+        let li2 = "-5";
+        assert_eq!(li1, li2);
 
-        // let li1 = LargeInt::from(531).to_string();
-        // let li2 = "531";
-        // assert_eq!(li1, li2);
+        let li1 = LargeInt::from(531).to_string();
+        let li2 = "531";
+        assert_eq!(li1, li2);
 
-        // let li1 = LargeInt::from(-531).to_string();
-        // let li2 = "-531";
-        // assert_eq!(li1, li2);
+        let li1 = LargeInt::from(-531).to_string();
+        let li2 = "-531";
+        assert_eq!(li1, li2);
 
         let li1 = (LargeInt::from(u128::MAX) + 10u8).to_string();
         let li2 = "340282366920938463463374607431768211465";
         assert_eq!(li1, li2);
-        // let li1 = (LargeInt::from(u128::MAX) + 2u8).compliment().to_string();
-        // let li2 = "-340282366920938463463374607431768211457";
-        // assert_eq!(li1, li2);
+        let li1 = (LargeInt::from(u128::MAX) + 2u8).compliment().to_string();
+        let li2 = "-340282366920938463463374607431768211457";
+        assert_eq!(li1, li2);
 
-        // let li1 = (LargeInt{bytes: vec!(319435266158123073073250785136463577088, 2)}).to_string();
-        // let li2 = "1000000000000000000000000000000000000000";
-        //            340282366920938463463374607431768211465
-        // assert_eq!(li1, li2);
+        let li1 = (LargeInt{bytes: vec!(319435266158123073073250785136463577088, 2)}).to_string();
+        let li2 = "1000000000000000000000000000000000000000";
+        assert_eq!(li1, li2);
     }
 }
