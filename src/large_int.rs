@@ -610,73 +610,61 @@ macro_rules! from_signed {
     };
 }
 
+macro_rules! ex_expr {
+    ( $e:expr ) => {
+        {$e}
+    };
+}
+
+// macro for implementing basic int operations for primitives
+// so use with LargeInt is natural
 macro_rules! ops {
-    ( $($t:ident)* ) => {
-        $(impl Add<$t> for LargeInt {
+    ( 
+        for $($t:ident)* -> impl
+        $trait:ident($op_name:ident <-> $op:tt) 
+        and $assign_trait:ident($assign_op:ident)
+    ) => {
+        $(impl $trait<$t> for LargeInt {
             type Output = LargeInt;
 
-            fn add(self, other: $t) -> LargeInt {
+            fn $op_name(self, other: $t) -> LargeInt {
                 let oth = LargeInt::from(other);
-                self + oth
+                ex_expr!(self $op oth)
             }
         })*
 
-        $(impl AddAssign<$t> for LargeInt {
-            fn add_assign(&mut self, other: $t) {
-                self.bytes = (self.clone() + other).bytes;
+        $(impl $assign_trait<$t> for LargeInt {
+            fn $assign_op(&mut self, other: $t) {
+                self.bytes = ex_expr!(self.clone() $op other).bytes;
             }
         })*
+    };
 
-        $(impl Sub<$t> for LargeInt {
-            type Output = LargeInt;
-
-            fn sub(self, other: $t) -> LargeInt {
-                let oth = LargeInt::from(other);
-                self - oth
-            }
-        })*
-
-        $(impl SubAssign<$t> for LargeInt {
-            fn sub_assign(&mut self, other: $t) {
-                self.bytes = (self.clone() - other).bytes;
-            }
-        })*
-
-        $(impl Mul<$t> for LargeInt {
-            type Output = LargeInt;
-
-            fn mul(self, other: $t) -> LargeInt {
-                let oth = LargeInt::from(other);
-                self * oth
-            }
-        })*
-
-        $(impl MulAssign<$t> for LargeInt {
-            fn mul_assign(&mut self, other: $t) {
-                self.bytes = (self.clone() * other).bytes;
-            }
-        })*
-
-        $(impl Div<$t> for LargeInt {
-            type Output = LargeInt;
-
-            fn div(self, other: $t) -> LargeInt {
-                let oth = LargeInt::from(other);
-                self / oth
-            }
-        })*
-
-        $(impl DivAssign<$t> for LargeInt {
-            fn div_assign(&mut self, other: $t) {
-                self.bytes = (self.clone() / other).bytes;
-            }
-        })*
+    ( 
+        for $($t:ident)* -> impl
+        $trait:ident($op_name:ident <-> $op:tt) 
+        and $assign_trait:ident($assign_op:ident), 
+        $($remaining:tt)*
+    ) => {
+        ops!(
+            for $($t)* -> impl
+            $trait($op_name <-> $op) 
+            and $assign_trait($assign_op)
+        );
+        ops!(for $($t)* -> impl $($remaining)*);
     };
 }
 
 from_signed!(i8 i32 i64 i128 isize);
 from_unsigned!(u8 u32 u64 u128 usize);
-ops!(i8 i32 i64 i128 isize u8 u32 u64 u128 usize);
+ops!(
+    for i8 i32 i64 i128 isize u8 u32 u64 u128 usize -> impl
+    Add(add <-> +) and AddAssign(add_assign),
+    Sub(sub <-> -) and SubAssign(sub_assign),
+    Mul(mul <-> *) and MulAssign(mul_assign),
+    Div(div <-> /) and DivAssign(div_assign),
+    Rem(rem <-> %) and RemAssign(rem_assign)
+);
 
 #[cfg(test)]
 mod tests {
