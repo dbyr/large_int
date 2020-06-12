@@ -548,6 +548,21 @@ macro_rules! ops {
                 self.bytes = (self.clone() * other).bytes;
             }
         })*
+
+        $(impl Div<$t> for LargeInt {
+            type Output = (LargeInt, LargeInt);
+
+            fn div(self, other: $t) -> (LargeInt, LargeInt) {
+                let oth = LargeInt::from(other);
+                self / oth
+            }
+        })*
+
+        $(impl DivAssign<$t> for LargeInt {
+            fn div_assign(&mut self, other: $t) {
+                self.bytes = (self.clone() * other).bytes;
+            }
+        })*
     };
 }
 
@@ -822,6 +837,32 @@ mod tests {
         let li1 = LargeInt::from(10);
         let li2 = LargeInt::from(20);
         assert_eq!(li1 / li2, (LargeInt::from(0), LargeInt::from(10)));
+    }
+
+    #[test]
+    fn test_order() {
+        let li1 = LargeInt::from(-10);
+        let li2 = LargeInt::from(2);
+        assert_eq!(li1 < li2, true);
+
+        let li1 = LargeInt::from(-10);
+        let li2 = LargeInt::from(2);
+        assert_eq!(li1 > li2, false);
+
+        let li1 = LargeInt::from(2);
+        let li2 = LargeInt::from(10);
+        assert_eq!(li1 <= li2, true);
+
+        let li1 = LargeInt::from(-2);
+        let li2 = LargeInt::from(-10);
+        assert_eq!(li1 >= li2, true);
+
+        let li1 = LargeInt::from(3);
+        let li2 = LargeInt::from(3);
+        assert_eq!(li1 <= li2, true);
+        let li1 = LargeInt::from(3);
+        let li2 = LargeInt::from(3);
+        assert_eq!(li1 >= li2, true);
     }
 
     #[test]
