@@ -1,5 +1,6 @@
 use std::u128;
 use std::str::FromStr;
+use std::cmp::Ordering;
 use std::num::ParseIntError;
 use std::ops::{
     Add,
@@ -261,6 +262,55 @@ impl MulAssign for LargeInt {
     }
 }
 
+impl Div for LargeInt {
+    type Output = (LargeInt, LargeInt);
+
+    // adapted from psuedo code here:
+    // https://en.wikipedia.org/wiki/Division_algorithm#Long_division
+    fn div(mut self, mut other: LargeInt) -> (LargeInt, LargeInt) {
+        let zero = LargeInt::from(0);
+        if other == zero {
+            panic!("Attempted divide by 0");
+        }
+
+        // deal with signage
+        let mut negative = false;
+        if self.is_negative() {
+            self = self.compliment();
+            negative = !negative;
+        }
+        if other.is_negative() {
+            other = other.compliment();
+            negative = !negative;
+        }
+        
+        // perform the division
+        let size = self.bytes.len();
+        let mut result = LargeInt::with_size(size);
+        let mut remainder = LargeInt::from(0);
+        let mut mask = LargeInt::from(1);
+        remainder.expand_to(size);
+        mask.expand_to(size);
+        mask <<= (size * 128) - 1;
+        for _ in 0..(size * 128) {
+            remainder <<= 1;
+            if self.clone() & mask.clone() != zero {
+                remainder += 1;
+            }
+            if remainder >= other {
+                remainder -= other.clone();
+                result |= mask.clone();
+            }
+            mask >>= 1;
+        }
+        if negative {
+            result = result.compliment();
+        }
+        result.shrink();
+        (result, remainder)
+    }
+}
+
 // impl FromStr for LargeInt {
 //     type Err = ParseIntError;
 
@@ -289,6 +339,12 @@ impl BitAnd for LargeInt {
     }
 }
 
+impl BitAndAssign for LargeInt {
+    fn bitand_assign(&mut self, rhs: LargeInt) {
+        self.bytes = (self.clone() & rhs).bytes;
+    }
+}
+
 impl BitOr for LargeInt {
     type Output = LargeInt;
 
@@ -303,6 +359,12 @@ impl BitOr for LargeInt {
         }
         result.shrink();
         result
+    }
+}
+
+impl BitOrAssign for LargeInt {
+    fn bitor_assign(&mut self, rhs: LargeInt) {
+        self.bytes = (self.clone() | rhs).bytes;
     }
 }
 
@@ -338,6 +400,19 @@ impl ShlAssign<usize> for LargeInt {
     }
 }
 
+impl PartialOrd for LargeInt {
+    fn partial_cmp(&self, other: &LargeInt) -> Option<Ordering> {
+        let tester = self.clone() - other.clone();
+        if tester == LargeInt::new() {
+            Some(Ordering::Equal)
+        } else if tester.is_negative() {
+            Some(Ordering::Less)
+        } else {
+            Some(Ordering::Greater)
+        }
+    }
+}
+
 macro_rules! from_unsigned {
     ( $($t:ident)* ) => {
         $(impl From<$t> for LargeInt {
@@ -354,8 +429,7 @@ macro_rules! from_unsigned {
         #[cfg(test)]
         mod from_unsigned_tests {
             use crate::large_int::{
-                LargeInt,
-                SIGN_BIT
+                LargeInt
             };
             
             $(use std::$t;)*
@@ -408,8 +482,7 @@ macro_rules! from_signed {
         #[cfg(test)]
         mod from_signed_tests {
             use crate::large_int::{
-                LargeInt,
-                SIGN_BIT
+                LargeInt
             };
             
             use std::u128;
@@ -458,6 +531,21 @@ macro_rules! ops {
         $(impl SubAssign<$t> for LargeInt {
             fn sub_assign(&mut self, other: $t) {
                 self.bytes = (self.clone() - other).bytes;
+            }
+        })*
+
+        $(impl Mul<$t> for LargeInt {
+            type Output = LargeInt;
+
+            fn mul(self, other: $t) -> LargeInt {
+                let oth = LargeInt::from(other);
+                self * oth
+            }
+        })*
+
+        $(impl MulAssign<$t> for LargeInt {
+            fn mul_assign(&mut self, other: $t) {
+                self.bytes = (self.clone() * other).bytes;
             }
         })*
     };
@@ -693,6 +781,47 @@ mod tests {
         let li1 = LargeInt{bytes: vec!(1u128 << 127, 1)};
         let li2 = LargeInt{bytes: vec!(2)};
         assert_eq!(li1 * li2, LargeInt{bytes: vec!(0, 3)});
+
+        let li1 = LargeInt{bytes: vec!(1u128 << 126)};
+        let li2 = li1.clone();
+        assert_eq!(li1 * li2, LargeInt{bytes: vec!(1, 0)} << 252);
+    }
+
+    #[test]
+    fn test_div() {
+        let li1 = LargeInt{bytes: vec!(6)};
+        let li2 = LargeInt{bytes: vec!(3)};
+        assert_eq!(li1 / li2, (LargeInt{bytes: vec!(2)}, LargeInt{bytes: vec!(0)}));
+
+        let li1 = LargeInt{bytes: vec!(6)};
+        let li2 = LargeInt{bytes: vec!(4)};
+        assert_eq!(li1 / li2, (LargeInt{bytes: vec!(1)}, LargeInt{bytes: vec!(2)}));
+
+        let li1 = LargeInt{bytes: vec!(0, 1)};
+        let li2 = LargeInt{bytes: vec!(2)};
+        assert_eq!(li1 / li2, (LargeInt{bytes: vec!(1 << 127, 0)}, LargeInt{bytes: vec!(0)}));
+
+        let li1 = LargeInt{bytes: vec!(0, 2)};
+        let li2 = LargeInt{bytes: vec!(8)};
+        assert_eq!(li1 / li2, (LargeInt{bytes: vec!(1 << 126)}, LargeInt{bytes: vec!(0)}));
+
+        let li1 = LargeInt::from(-10);
+        let li2 = LargeInt::from(2);
+        assert_eq!(li1 / li2, (LargeInt::from(-5), LargeInt::from(0)));
+
+        let li1 = LargeInt::from(-10);
+        let li2 = LargeInt::from(2);
+        assert_eq!(li1 / li2, (LargeInt::from(-5), LargeInt::from(0)));
+        let li1 = LargeInt::from(-10);
+        let li2 = LargeInt::from(-2);
+        assert_eq!(li1 / li2, (LargeInt::from(5), LargeInt::from(0)));
+        let li1 = LargeInt::from(10);
+        let li2 = LargeInt::from(-2);
+        assert_eq!(li1 / li2, (LargeInt::from(-5), LargeInt::from(0)));
+
+        let li1 = LargeInt::from(10);
+        let li2 = LargeInt::from(20);
+        assert_eq!(li1 / li2, (LargeInt::from(0), LargeInt::from(10)));
     }
 
     #[test]
