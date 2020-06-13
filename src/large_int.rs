@@ -85,7 +85,7 @@ impl LargeInt {
 
     // represents this int with size u128's if currently
     // represented with less, else leave it as is
-    fn expand_to(&mut self, size: usize) {
+    pub fn expand_to(&mut self, size: usize) {
         let extension = if self.is_negative() {
             u128::MAX
         } else {
@@ -113,9 +113,83 @@ impl LargeInt {
         compliment + 1
     }
 
+    pub fn add_no_shrink(mut self, mut other: LargeInt) -> LargeInt {
+
+        // prepare for overflow
+        let size = self.bytes.len().max(other.bytes.len()) + 1;
+        self.expand_to(size);
+        other.expand_to(size);
+
+        // perform addition
+        let mut result = LargeInt::with_size(size);
+        let mut res;
+        let mut o_f = false;
+        for i in 0..size {
+            let mut add_res = self.bytes[i].overflowing_add(other.bytes[i]);
+            let overflowed = add_res.1;
+
+            // check overflow for previous addition
+            // this can add at most +1 to this result
+            if o_f { 
+                add_res = add_res.0.overflowing_add(1u128);
+            }
+            res = add_res.0;
+            o_f = overflowed || add_res.1;
+            result.bytes[i] = res;
+        }
+        result
+    }
+
+    // use the implementation of addition for subtraction
+    pub fn sub_no_shrink(self, other: LargeInt) -> LargeInt {
+        self.add_no_shrink(other.compliment())
+    }
+
+    pub fn mul_no_shrink(mut self, mut other: LargeInt) -> LargeInt {
+
+        // based off information found here:
+        // https://en.wikipedia.org/wiki/Two%27s_complement#Multiplication
+        let mut negate = false;
+        if self.is_negative() {
+            self = self.compliment();
+            negate = !negate;
+        }
+        if other.is_negative() {
+            other = other.compliment();
+            negate = !negate;
+        }
+        let n = self.bytes.len();
+        let m = other.bytes.len();
+        let size = n.max(m) * 2;
+        other.expand_to(size);
+        let zero = LargeInt::from(0);
+        let mut result = LargeInt::with_size(size);
+        let mut mask = LargeInt::from(1);
+        mask.expand_to_ignore_sign(n);
+
+        for i in 0..(128 * n) {
+            if self.clone() & mask.clone() != zero {
+                result += other.clone() << i;
+            }
+            mask <<= 1;
+        }
+        if negate {
+            result.compliment()
+        } else {
+            result
+        }
+    }
+
     // adapted from psuedo code here:
     // https://en.wikipedia.org/wiki/Division_algorithm#Long_division
-    fn div_with_remainder(mut self, mut other: LargeInt) -> (LargeInt, LargeInt) {
+    pub fn div_with_remainder(self, other: LargeInt) -> (LargeInt, LargeInt) {
+        let (mut result, mut remainder) = self.div_with_remainder_no_shrink(other);
+        result.shrink();
+        remainder.shrink();
+        (result, remainder)
+    }
+
+    pub fn div_with_remainder_no_shrink(mut self, mut other: LargeInt) -> (LargeInt, LargeInt) {
         let zero = LargeInt::from(0);
         if other == zero {
             panic!("Attempted divide by 0");
@@ -154,8 +228,6 @@ impl LargeInt {
         if negative {
             result = result.compliment();
         }
-        result.shrink();
-        remainder.shrink();
         (result, remainder)
     }
 }
@@ -163,30 +235,8 @@ impl LargeInt {
 impl Add for LargeInt {
     type Output = LargeInt;
 
-    fn add(mut self, mut other: LargeInt) -> LargeInt {
-
-        // prepare for overflow
-        let size = self.bytes.len().max(other.bytes.len()) + 1;
-        self.expand_to(size);
-        other.expand_to(size);
-
-        // perform addition
-        let mut result = LargeInt::with_size(size);
-        let mut res;
-        let mut o_f = false;
-        for i in 0..size {
-            let mut add_res = self.bytes[i].overflowing_add(other.bytes[i]);
-            let overflowed = add_res.1;
-
-            // check overflow for previous addition
-            // this can add at most +1 to this result
-            if o_f { 
-                add_res = add_res.0.overflowing_add(1u128);
-            }
-            res = add_res.0;
-            o_f = overflowed || add_res.1;
-            result.bytes[i] = res;
-        }
+    fn add(self, other: LargeInt) -> LargeInt {
+        let mut result = self.add_no_shrink(other);
         result.shrink();
         result
     }
@@ -201,9 +251,10 @@ impl AddAssign for LargeInt {
 impl Sub for LargeInt {
     type Output = LargeInt;
 
-    // use the implementation of addition for subtraction
     fn sub(self, other: LargeInt) -> LargeInt {
-        self + other.compliment()
+        let mut result = self.sub_no_shrink(other);
+        result.shrink();
+        result
     }
 }
 
@@ -216,24 +267,8 @@ impl SubAssign for LargeInt {
 impl Mul for LargeInt {
     type Output = LargeInt;
 
-    // based off information found here:
-    // https://en.wikipedia.org/wiki/Two%27s_complement#Multiplication
-    fn mul(self, mut other: LargeInt) -> LargeInt {
-        let n = self.bytes.len();
-        let m = other.bytes.len();
-        let size = n.max(m) * 2;
-        other.expand_to(size);
-        let zero = LargeInt::from(0);
-        let mut result = LargeInt::with_size(size);
-        let mut mask = LargeInt::from(1);
-        mask.expand_to_ignore_sign(n);
-
-        for i in 0..(128 * n) {
-            if self.clone() & mask.clone() != zero {
-                result += other.clone() << i;
-            }
-            mask <<= 1;
-        }
+    fn mul(self, other: LargeInt) -> LargeInt {
+        let mut result = self.mul_no_shrink(other);
         result.shrink();
         result
     }
@@ -492,17 +527,12 @@ impl Display for LargeInt {
         // find the largest divisor
         while divisor < num {
             divisor *= 10;
-            // println!("divisor = {:?}", divisor);
         }
-        // println!("num = {:?}", num);
         divisor /= 10; // re-adjust
 
         // now calculate the digit at each position
         while divisor != zero {
             let digit = num.clone() / divisor.clone();
-            // println!("digit = {}", digit.bytes[0]);
-            // println!("digit.len() = {}", digit.bytes.len());
-            // println!("divisor = {:?}", divisor);
             result.push_str(&digit.bytes[0].to_string()); // should rep. whole number
             num -= digit * divisor.clone();
             divisor /= 10;
@@ -592,6 +622,7 @@ macro_rules! from_signed {
             };
             
             use std::u128;
+            $(use std::$t;)*
 
             #[test]
             fn test_from_signed() {
@@ -602,7 +633,10 @@ macro_rules! from_signed {
                 let li = LargeInt::from(-1 as $t);
                 assert_eq!(li.bytes[0], u128::MAX); // 2's compliment rep of -1 is all 1s
 
-                assert!(li.is_negative());)*
+                assert!(li.is_negative());
+
+                assert!(LargeInt::from($t::MIN).is_negative());
+                )*
             }
         }
     };
@@ -634,6 +668,15 @@ macro_rules! ops {
         $(impl $assign_trait<$t> for LargeInt {
             fn $assign_op(&mut self, other: $t) {
                 self.bytes = ex_expr!(self.clone() $op other).bytes;
+            }
+        })*
+
+        // allow reverse operations too
+        $(impl $trait<LargeInt> for $t {
+            type Output = LargeInt;
+
+            fn $op_name(self, other: LargeInt) -> LargeInt {
+                ex_expr!(other $op self)
             }
         })*
     };
@@ -883,7 +926,7 @@ mod internal_tests {
 
         let li1 = LargeInt{bytes: vec!(1u128 << 127)};
         let li2 = LargeInt{bytes: vec!(2)};
-        assert_eq!(li1 * li2, LargeInt{bytes: vec!(0, 1)});
+        assert_eq!(li1 * li2, LargeInt{bytes: vec!(0, u128::MAX)});
 
         // check if both orders work the same
         let li2 = LargeInt{bytes: vec!(1u128 << 127, 1)};

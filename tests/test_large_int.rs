@@ -1,5 +1,7 @@
 extern crate large_int;
 
+use std::u128;
+use std::i128;
 use std::str::FromStr;
 use large_int::large_int::LargeInt;
 
@@ -21,6 +23,13 @@ fn test_multiplication() {
     init *= 7;
     init *= 10;
     assert_eq!(exp, init);
+
+    let pos = LargeInt::from(i128::MAX) * LargeInt::from(i128::MAX);
+    let two_neg = LargeInt::from(i128::MIN + 1) * LargeInt::from(i128::MIN + 1);
+    let neg = LargeInt::from(i128::MIN + 1) * LargeInt::from(i128::MAX);
+    assert!(i128::MAX == -(i128::MIN + 1));
+    assert!(pos == two_neg);
+    assert!(pos == -neg);
 }
 
 #[test]
