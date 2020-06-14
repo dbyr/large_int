@@ -542,29 +542,65 @@ impl Display for LargeInt {
             result.push('-');
             num = num.compliment();
         }
+        let keep_going: Box<dyn Fn(usize) -> bool>
+        = if let Some(precision) = f.precision() {
+            Box::new(move |i| i <= precision)
+        } else {
+            Box::new(|_| true)
+        };
 
         // find the largest divisor
+        let mut power = 0;
         while divisor < num {
             divisor *= 10;
+            power += 1;
         }
         divisor /= 10; // re-adjust
+        power -= 1;
 
         // now calculate the digit at each position
-        while divisor != zero {
+        let mut i = 0;
+        while divisor != zero && keep_going(i) {
             let digit = num.clone() / divisor.clone();
             result.push_str(&digit.bytes[0].to_string()); // should rep. whole number
             num -= digit * divisor.clone();
             divisor /= 10;
+            i += 1;
         }
 
+        // deal with precision and two special cases
         // these cases need to be handled specially because of the
         // two's complement problem
-        if result == "" {
-            result.push('0');
-        } else if result == "-" {
-            result.push('1');
+        if let Some(precision) = f.precision() {
+            let length = if result == "" {
+                power = 0;
+                result.push_str("0.0");
+                result.len() - 2
+            } else if result == "-" {
+                power = 0;
+                result.push_str("1.0");
+                result.len() - 3
+            } else if &result[0..=0] == "-" {
+                result.insert(2, '.');
+                result.len() - 3
+            } else {
+                result.insert(1, '.');
+                result.len() - 2
+            };
+            if length < precision {
+                let remaining = precision - length;
+                result.push_str(&"0".repeat(remaining));
+            }
+            result.push('e');
+            result.push_str(&power.to_string());
+        } else {
+            if result == "" {
+                result.push('0');
+            } else if result == "-" {
+                result.push('1');
+            }
         }
-        write!(f, "{}", result)
+        f.write_str(&result)
     }
 }
 
