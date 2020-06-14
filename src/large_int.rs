@@ -48,6 +48,14 @@ fn is_u128_negative(val: u128) -> bool {
     (val & SIGN_BIT) > 1
 }
 
+fn reorder_by_ones_count(left: LargeInt, right: LargeInt) -> (LargeInt, LargeInt) {
+    if right.count_ones() < left.count_ones() {
+        (right, left)
+    } else {
+        (left, right)
+    }
+}
+
 impl LargeInt {
     pub fn new() -> LargeInt {
         LargeInt{bytes: vec!(0)}
@@ -113,6 +121,14 @@ impl LargeInt {
         compliment + 1
     }
 
+    pub fn count_ones(&self) -> u32 {
+        let mut count = 0;
+        for byte in self.bytes.iter() {
+            count += byte.count_ones();
+        }
+        count
+    }
+
     pub fn add_no_shrink(mut self, mut other: LargeInt) -> LargeInt {
 
         // prepare for overflow
@@ -158,18 +174,21 @@ impl LargeInt {
             other = other.compliment();
             negate = !negate;
         }
-        let n = self.bytes.len();
-        let m = other.bytes.len();
+        
+        // slightly optimise by multiplying by the value with less 1's
+        let (multiplier, mut multiplicand) = reorder_by_ones_count(self, other);
+        let n = multiplier.bytes.len();
+        let m = multiplicand.bytes.len();
         let size = n.max(m) * 2;
-        other.expand_to(size);
+        multiplicand.expand_to(size);
         let zero = LargeInt::from(0);
         let mut result = LargeInt::with_size(size);
         let mut mask = LargeInt::from(1);
         mask.expand_to_ignore_sign(n);
 
         for i in 0..(128 * n) {
-            if self.clone() & mask.clone() != zero {
-                result += other.clone() << i;
+            if multiplier.clone() & mask.clone() != zero {
+                result += multiplicand.clone() << i;
             }
             mask <<= 1;
         }
