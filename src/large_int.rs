@@ -46,6 +46,7 @@ pub struct LargeInt {
 }
 
 const SIGN_BIT: u128 = 1u128 << 127;
+const BITS_PER_CHUNK: u32 = 128;
 
 fn is_u128_negative(val: u128) -> bool {
     (val & SIGN_BIT) > 1
@@ -628,12 +629,13 @@ impl Shr<usize> for LargeInt {
         let size = result.bytes.len();
 
         // simply shift chunks right while required
-        while remaining > 128 {
-            for i in 1..size {
-                result.bytes[i - 1] = result.bytes[i];
-            }
-            result.bytes[size - 1] = 0;
-            remaining -= 128;
+        let shifts = remaining / BITS_PER_CHUNK as usize;
+        remaining = remaining % BITS_PER_CHUNK as usize;
+        for i in shifts..size {
+            result.bytes[i - shifts] = result.bytes[i];
+        }
+        for i in size - shifts..size {
+            result.bytes[i] = 0;
         }
 
         // shift the remainder
@@ -645,7 +647,7 @@ impl Shr<usize> for LargeInt {
             let temp_mask = result.bytes[i] & data_mask;
             result.bytes[i] = result.bytes[i].checked_shr(remaining as u32).unwrap_or(0);
             result.bytes[i] |= result_mask;
-            result_mask = temp_mask.checked_shl(128 - remaining as u32).unwrap_or(0);
+            result_mask = temp_mask.checked_shl(BITS_PER_CHUNK - remaining as u32).unwrap_or(0);
         }
         result
     }
@@ -689,12 +691,13 @@ impl Shl<usize> for LargeInt {
         let size = result.bytes.len();
 
         // shift chunks left while required
-        while remaining > 128 {
-            for i in (1..size).rev() {
-                result.bytes[i] = result.bytes[i - 1];
-            }
-            result.bytes[0] = 0;
-            remaining -= 128;
+        let shifts = remaining / BITS_PER_CHUNK as usize;
+        remaining = remaining % BITS_PER_CHUNK as usize;
+        for i in (shifts..size).rev() {
+            result.bytes[i] = result.bytes[i - shifts];
+        }
+        for i in 0..shifts {
+            result.bytes[i] = 0;
         }
 
         // shift the remainder
