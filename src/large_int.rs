@@ -73,7 +73,7 @@ impl LargeInt {
         !self.is_negative()
     }
 
-    pub fn shrink(&mut self) {
+    fn shrink(&mut self) {
         let (remove_chunk, checker): (u128, Box<dyn Fn(u128) -> bool>) = 
         if self.is_negative() {
             (u128::MAX, Box::new(|chunk| !is_u128_negative(chunk)))
@@ -93,7 +93,7 @@ impl LargeInt {
 
     // represents this int with size u128's if currently
     // represented with less, else leave it as is
-    pub fn expand_to(&mut self, size: usize) {
+    fn expand_to(&mut self, size: usize) {
         let extension = if self.is_negative() {
             u128::MAX
         } else {
@@ -129,7 +129,7 @@ impl LargeInt {
         count
     }
 
-    pub fn add_no_shrink(mut self, mut other: LargeInt) -> LargeInt {
+    fn add_no_shrink(mut self, mut other: LargeInt) -> LargeInt {
 
         // prepare for overflow
         let size = self.bytes.len().max(other.bytes.len()) + 1;
@@ -157,11 +157,11 @@ impl LargeInt {
     }
 
     // use the implementation of addition for subtraction
-    pub fn sub_no_shrink(self, other: LargeInt) -> LargeInt {
+    fn sub_no_shrink(self, other: LargeInt) -> LargeInt {
         self.add_no_shrink(other.compliment())
     }
 
-    pub fn mul_no_shrink(mut self, mut other: LargeInt) -> LargeInt {
+    fn mul_no_shrink(mut self, mut other: LargeInt) -> LargeInt {
 
         // based off information found here:
         // https://en.wikipedia.org/wiki/Two%27s_complement#Multiplication
@@ -208,7 +208,7 @@ impl LargeInt {
         (result, remainder)
     }
 
-    pub fn div_with_remainder_no_shrink(mut self, mut other: LargeInt) -> (LargeInt, LargeInt) {
+    fn div_with_remainder_no_shrink(mut self, mut other: LargeInt) -> (LargeInt, LargeInt) {
         let zero = LargeInt::from(0);
         if other == zero {
             panic!("Attempted divide by 0");
