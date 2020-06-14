@@ -35,6 +35,9 @@ use std::ops::{
 // store a vector of little-endian, 2's compliment figures
 // the sign bit is in the most significant figure (more[0])
 // littel endian was chosen so vec operations are faster
+
+/// An unsigned integer that is unbounded in both positive
+/// and negative.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LargeInt {
     // use u128 since, if someone needs a LargeInt, it's likely
@@ -57,18 +60,52 @@ fn reorder_by_ones_count(left: LargeInt, right: LargeInt) -> (LargeInt, LargeInt
 }
 
 impl LargeInt {
+    /// Returns a default LargeInt (default == 0)
+    /// 
+    /// # Examples
+    /// ```
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let zero = LargeInt::new();
+    /// ```
     pub fn new() -> LargeInt {
         LargeInt{bytes: vec!(0)}
     }
 
-    pub fn with_size(size: usize) -> LargeInt {
+    fn with_size(size: usize) -> LargeInt {
         LargeInt{bytes: vec!(0; size)}
     }
 
+    /// Checks if this value is negative
+    /// 
+    /// # Examples
+    /// ```
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let neg = LargeInt::from(-1);
+    /// let pos = LargeInt::from(1);
+    /// assert!(neg.is_negative());
+    /// assert!(!pos.is_negative());
+    /// ```
+    /// 
+    /// Returns true if this LargeInt is negative, false otherwise
     pub fn is_negative(&self) -> bool {
         is_u128_negative(self.bytes[self.bytes.len() - 1])
     }
 
+    /// Checks if this value is positive
+    /// 
+    /// # Examples
+    /// ```
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let neg = LargeInt::from(-1);
+    /// let pos = LargeInt::from(1);
+    /// assert!(!neg.is_positive());
+    /// assert!(pos.is_positive());
+    /// ```
+    /// 
+    /// Returns true if this LargeInt is positive, false otherwise
     pub fn is_positive(&self) -> bool {
         !self.is_negative()
     }
@@ -121,6 +158,18 @@ impl LargeInt {
         compliment + 1
     }
 
+    /// Counts the number of 1's in the binary representation
+    /// of this LargeInt
+    /// 
+    /// # Examples
+    /// ```
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let two = LargeInt::from(2);
+    /// assert!(two.count_ones() == 1);
+    /// ```
+    /// 
+    /// Returns the number of 1's in this binary representation
     pub fn count_ones(&self) -> u32 {
         let mut count = 0;
         for byte in self.bytes.iter() {
@@ -199,8 +248,24 @@ impl LargeInt {
         }
     }
 
-    // adapted from psuedo code here:
-    // https://en.wikipedia.org/wiki/Division_algorithm#Long_division
+    /// Divides self by other and returns both the result and remainder
+    /// 
+    /// # Examples
+    /// ```
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let ten = LargeInt::from(10);
+    /// let five = LargeInt::from(4);
+    /// let (result, remainder) = ten.div_with_remainder(five);
+    /// assert!(result == LargeInt::from(2));
+    /// assert!(remainder == LargeInt::from(2));
+    /// ```
+    /// 
+    /// Returns a pair of LargeInts that represent the result and remainder
+    /// of the division respectively.
+    /// 
+    /// # Panics
+    /// Panics if other is 0
     pub fn div_with_remainder(self, other: LargeInt) -> (LargeInt, LargeInt) {
         let (mut result, mut remainder) = self.div_with_remainder_no_shrink(other);
         result.shrink();
@@ -209,6 +274,8 @@ impl LargeInt {
     }
 
     fn div_with_remainder_no_shrink(mut self, mut other: LargeInt) -> (LargeInt, LargeInt) {
+        // adapted from psuedo code here:
+        // https://en.wikipedia.org/wiki/Division_algorithm#Long_division
         let zero = LargeInt::from(0);
         if other == zero {
             panic!("Attempted divide by 0");
@@ -254,6 +321,18 @@ impl LargeInt {
 impl Add for LargeInt {
     type Output = LargeInt;
 
+    /// Adds two LargeInts
+    /// 
+    /// # Examples
+    /// ```
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let ten = LargeInt::from(10);
+    /// let two = LargeInt::from(2);
+    /// assert!(ten + two == LargeInt::from(12));
+    /// ```
+    /// 
+    /// Returns a LargeInt as the sum of the two LargeInts
     fn add(self, other: LargeInt) -> LargeInt {
         let mut result = self.add_no_shrink(other);
         result.shrink();
@@ -262,6 +341,17 @@ impl Add for LargeInt {
 }
 
 impl AddAssign for LargeInt {
+    /// Adds a LargeInt to this LargeInt
+    /// 
+    /// # Examples
+    /// ```
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let mut ten = LargeInt::from(10);
+    /// let two = LargeInt::from(2);
+    /// ten += two;
+    /// assert!(ten == LargeInt::from(12));
+    /// ```
     fn add_assign(&mut self, other: LargeInt) {
         self.bytes = (self.clone() + other).bytes;
     }
@@ -270,6 +360,18 @@ impl AddAssign for LargeInt {
 impl Sub for LargeInt {
     type Output = LargeInt;
 
+    /// Subtracts a LargeInt from another
+    /// 
+    /// # Examples
+    /// ```
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let ten = LargeInt::from(10);
+    /// let two = LargeInt::from(2);
+    /// assert!(ten - two == LargeInt::from(8));
+    /// ```
+    /// 
+    /// Returns self minus other as a LargeInt
     fn sub(self, other: LargeInt) -> LargeInt {
         let mut result = self.sub_no_shrink(other);
         result.shrink();
@@ -278,6 +380,17 @@ impl Sub for LargeInt {
 }
 
 impl SubAssign for LargeInt {
+    /// Subtracts a LargeInt from this LargeInt
+    /// 
+    /// # Examples
+    /// ```
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let mut ten = LargeInt::from(10);
+    /// let two = LargeInt::from(2);
+    /// ten -= two;
+    /// assert!(ten == LargeInt::from(8));
+    /// ```
     fn sub_assign(&mut self, other: LargeInt) {
         self.bytes = (self.clone() - other).bytes;
     }
@@ -286,6 +399,18 @@ impl SubAssign for LargeInt {
 impl Mul for LargeInt {
     type Output = LargeInt;
 
+    /// Multiplies two LargeInts
+    /// 
+    /// # Examples
+    /// ```
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let ten = LargeInt::from(10);
+    /// let two = LargeInt::from(2);
+    /// assert!(ten * two == LargeInt::from(20));
+    /// ```
+    /// 
+    /// Returns a LargeInt that is the product of the two LargeInts given
     fn mul(self, other: LargeInt) -> LargeInt {
         let mut result = self.mul_no_shrink(other);
         result.shrink();
@@ -294,6 +419,17 @@ impl Mul for LargeInt {
 }
 
 impl MulAssign for LargeInt {
+    /// Multiplies this LargeInt by another
+    /// 
+    /// # Examples
+    /// ```
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let mut ten = LargeInt::from(10);
+    /// let two = LargeInt::from(2);
+    /// ten *= two;
+    /// assert!(ten == LargeInt::from(20));
+    /// ```
     fn mul_assign(&mut self, rhs: LargeInt) {
         self.bytes = (self.clone() * rhs).bytes;
     }
@@ -302,12 +438,41 @@ impl MulAssign for LargeInt {
 impl Div for LargeInt {
     type Output = LargeInt;
 
+    /// Divides a LargeInt by another
+    /// 
+    /// # Examples
+    /// ```
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let ten = LargeInt::from(10);
+    /// let two = LargeInt::from(2);
+    /// assert!(ten / two == LargeInt::from(5));
+    /// ```
+    /// 
+    /// Returns self divided by other as a LargeInt
+    /// 
+    /// # Panics
+    /// Panics if other is 0
     fn div(self, other: LargeInt) -> LargeInt {
         self.div_with_remainder(other).0
     }
 }
 
 impl DivAssign for LargeInt {
+    /// Divides this LargeInt by another
+    /// 
+    /// # Examples
+    /// ```
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let mut ten = LargeInt::from(10);
+    /// let two = LargeInt::from(2);
+    /// ten /= two;
+    /// assert!(ten == LargeInt::from(5));
+    /// ```
+    /// 
+    /// # Panics
+    /// Panics if other is 0
     fn div_assign(&mut self, other: LargeInt) {
         self.bytes = (self.clone() / other).bytes;
     }
@@ -316,12 +481,35 @@ impl DivAssign for LargeInt {
 impl Rem for LargeInt {
     type Output = LargeInt;
 
+    /// Gets the remainder of a division operation
+    /// 
+    /// # Examples
+    /// ```
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let ten = LargeInt::from(11);
+    /// let two = LargeInt::from(5);
+    /// assert!(ten % two == LargeInt::from(1));
+    /// ```
+    /// 
+    /// Returns the remainder as a LargeInt
     fn rem(self, other: LargeInt) -> LargeInt {
         self.div_with_remainder(other).1
     }
 }
 
 impl RemAssign for LargeInt {
+    /// Assigns the remainder of this LargeInt divided by another
+    /// 
+    /// # Examples
+    /// ```
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let mut eleven = LargeInt::from(11);
+    /// let five = LargeInt::from(5);
+    /// eleven %= five;
+    /// assert!(eleven == LargeInt::from(1));
+    /// ```
     fn rem_assign(&mut self, other: LargeInt) {
         self.bytes = (self.clone() % other).bytes;
     }
@@ -330,6 +518,18 @@ impl RemAssign for LargeInt {
 impl BitAnd for LargeInt {
     type Output = LargeInt;
 
+    /// Performs a bitwise and on two LargeInts
+    /// 
+    /// # Examples
+    /// ```
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let three = LargeInt::from(3);
+    /// let two = LargeInt::from(2);
+    /// assert!(three & two == LargeInt::from(2));
+    /// ```
+    /// 
+    /// Returns the bitwise and as a LargeInt
     fn bitand(mut self, mut rhs: LargeInt) -> LargeInt {
         let size = self.bytes.len().max(rhs.bytes.len());
         let mut result = LargeInt::with_size(size);
@@ -345,6 +545,17 @@ impl BitAnd for LargeInt {
 }
 
 impl BitAndAssign for LargeInt {
+    /// Bitwise ands this LargeInt with another
+    /// 
+    /// # Examples
+    /// ```
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let mut three = LargeInt::from(3);
+    /// let two = LargeInt::from(2);
+    /// three &= two;
+    /// assert!(three == LargeInt::from(2));
+    /// ```
     fn bitand_assign(&mut self, rhs: LargeInt) {
         self.bytes = (self.clone() & rhs).bytes;
     }
@@ -353,6 +564,18 @@ impl BitAndAssign for LargeInt {
 impl BitOr for LargeInt {
     type Output = LargeInt;
 
+    /// Bitwise ors two LargeInts
+    /// 
+    /// # Examples
+    /// ```
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let five = LargeInt::from(5);
+    /// let two = LargeInt::from(2);
+    /// assert!(five | two == LargeInt::from(7));
+    /// ```
+    /// 
+    /// Returns the bitwise or as a LargeInt
     fn bitor(mut self, mut rhs: LargeInt) -> LargeInt {
         let size = self.bytes.len().max(rhs.bytes.len());
         let mut result = LargeInt::with_size(size);
@@ -368,6 +591,17 @@ impl BitOr for LargeInt {
 }
 
 impl BitOrAssign for LargeInt {
+    /// Bitwise ors this LargeInt with another
+    /// 
+    /// # Examples
+    /// ```
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let mut five = LargeInt::from(5);
+    /// let two = LargeInt::from(2);
+    /// five |= two;
+    /// assert!(five == LargeInt::from(7));
+    /// ```
     fn bitor_assign(&mut self, rhs: LargeInt) {
         self.bytes = (self.clone() | rhs).bytes;
     }
@@ -376,6 +610,18 @@ impl BitOrAssign for LargeInt {
 impl Shr<usize> for LargeInt {
     type Output = LargeInt;
 
+    /// Shifts the bits right in a LargeInt by bits.
+    /// Overflow is lost.
+    /// 
+    /// # Examples
+    /// ```
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let ten = LargeInt::from(10);
+    /// assert!(ten >> 1 == LargeInt::from(5));
+    /// ```
+    /// 
+    /// Returns the shifted bits as a LargeInt
     fn shr(self, bits: usize) -> LargeInt {
         let mut remaining = bits;
         let mut result = self.clone();
@@ -406,6 +652,17 @@ impl Shr<usize> for LargeInt {
 }
 
 impl ShrAssign<usize> for LargeInt {
+    /// Shifts the bits right in this LargeInt by bits.
+    /// Overflow is lost.
+    /// 
+    /// # Examples
+    /// ```
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let mut ten = LargeInt::from(10);
+    /// ten >>= 1;
+    /// assert!(ten == LargeInt::from(5));
+    /// ```
     fn shr_assign(&mut self, bits: usize) {
         self.bytes = (self.clone() >> bits).bytes;
     }
@@ -414,6 +671,18 @@ impl ShrAssign<usize> for LargeInt {
 impl Shl<usize> for LargeInt {
     type Output = LargeInt;
 
+    /// Shifts the bits left in a LargeInt by bits.
+    /// Overflow is lost.
+    /// 
+    /// # Examples
+    /// ```
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let five = LargeInt::from(5);
+    /// assert!(five << 1 == LargeInt::from(10));
+    /// ```
+    /// 
+    /// Returns the shifted bits as a LargeInt
     fn shl(self, bits: usize) -> LargeInt {
         let mut remaining = bits;
         let mut result = self.clone();
@@ -444,6 +713,17 @@ impl Shl<usize> for LargeInt {
 }
 
 impl ShlAssign<usize> for LargeInt {
+    /// Shifts the bits left in this LargeInt by bits.
+    /// Overflow is lost.
+    /// 
+    /// # Examples
+    /// ```
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let mut five = LargeInt::from(5);
+    /// five <<= 1;
+    /// assert!(five == LargeInt::from(10));
+    /// ```
     fn shl_assign(&mut self, bits: usize) {
         self.bytes = (self.clone() << bits).bytes;
     }
@@ -452,6 +732,17 @@ impl ShlAssign<usize> for LargeInt {
 impl Neg for LargeInt {
     type Output = LargeInt;
 
+    /// Negates a LargeInt
+    /// 
+    /// # Examples
+    /// ```
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let five = LargeInt::from(5);
+    /// assert!(-five == LargeInt::from(-5));
+    /// ```
+    /// 
+    /// Returns the negated integer as a LargeInt
     fn neg(self) -> LargeInt {
         self.compliment()
     }
@@ -460,6 +751,18 @@ impl Neg for LargeInt {
 impl BitXor for LargeInt {
     type Output = LargeInt;
 
+    /// Bitwise xors two LargeInts
+    /// 
+    /// # Examples
+    /// ```
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let five = LargeInt::from(5);
+    /// let three = LargeInt::from(3);
+    /// assert!(five ^ three == LargeInt::from(6));
+    /// ```
+    /// 
+    /// Returns the bitwise xor as a LargeInt
     fn bitxor(mut self, mut other: LargeInt) -> LargeInt {
         let size = self.bytes.len().max(other.bytes.len());
         let mut result = LargeInt::with_size(size);
@@ -473,6 +776,17 @@ impl BitXor for LargeInt {
 }
 
 impl BitXorAssign for LargeInt {
+    /// Bitwise ors this LargeInt by another
+    /// 
+    /// # Examples
+    /// ```
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let mut five = LargeInt::from(5);
+    /// let three = LargeInt::from(3);
+    /// five ^= three;
+    /// assert!(five == LargeInt::from(6));
+    /// ```
     fn bitxor_assign(&mut self, other: LargeInt) {
         self.bytes = (self.clone() ^ other).bytes;
     }
@@ -481,6 +795,17 @@ impl BitXorAssign for LargeInt {
 impl Not for LargeInt {
     type Output = LargeInt;
 
+    /// Get the C equivalent "not" of a LargeInt
+    /// 
+    /// # Examples
+    /// ```
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let five = LargeInt::from(5);
+    /// assert!(!five == LargeInt::from(0));
+    /// ```
+    /// 
+    /// Returns, as a LargeInt, 0 if self != 0, or 1 otherwise
     fn not(self) -> LargeInt {
         let zero = LargeInt::new();
         if self == zero {
@@ -492,6 +817,19 @@ impl Not for LargeInt {
 }
 
 impl PartialOrd for LargeInt {
+    /// Determines if a LargeInt is larger, equal or greater than another.
+    /// 
+    /// # Examples
+    /// ```
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let five = LargeInt::from(5);
+    /// let four = LargeInt::from(4);
+    /// assert!(five > four);
+    /// assert!(four < five);
+    /// ```
+    /// 
+    /// Returns an ordering of the comparison
     fn partial_cmp(&self, other: &LargeInt) -> Option<Ordering> {
         let tester = self.clone() - other.clone();
         if tester == LargeInt::new() {
@@ -507,6 +845,20 @@ impl PartialOrd for LargeInt {
 impl FromStr for LargeInt {
     type Err = ParseIntError;
 
+    /// Creates a LargeInt from a string
+    /// 
+    /// # Examples
+    /// ```
+    /// use std::str::FromStr;
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let five_str = LargeInt::from_str("5").unwrap();
+    /// let five = LargeInt::from(5);
+    /// assert!(five == five_str);
+    /// ```
+    /// 
+    /// Returns a Result of either a LargeInt representation 
+    /// of the decimal string (Ok), or a ParseIntError (Err)
     fn from_str(s: &str) -> Result<LargeInt, ParseIntError> {
         let mut weight = LargeInt::from(1);
         let mut negative = false;
@@ -533,6 +885,20 @@ impl FromStr for LargeInt {
 }
 
 impl Display for LargeInt {
+    /// Converts a LargeInt into a string representation
+    /// 
+    /// # Examples
+    /// ```
+    /// use std::string::ToString;
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let five = LargeInt::from(5);
+    /// let four = LargeInt::from(445);
+    /// assert!(five.to_string() == "5");
+    /// assert!(format!("{:.1}", four) == "4.4e2");
+    /// ```
+    /// 
+    /// Returns a Result of whether or not the conversion was successful
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         let mut result = String::new();
         let mut num = self.clone();

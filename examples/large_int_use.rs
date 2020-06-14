@@ -3,7 +3,6 @@ extern crate large_int;
 use large_int::large_int::LargeInt;
 use std::u128;
 use std::i128;
-use std::string::ToString;
 use std::str::FromStr;
 
 fn main() {
