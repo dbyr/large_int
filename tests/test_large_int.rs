@@ -7,12 +7,18 @@ use large_int::large_int::LargeInt;
 #[test]
 fn test_string_conversions() {
     let rep = "777777777777777777777777777777777777777777777777770";
+    let to_2 = "7.77e50";
     let int = LargeInt::from_str(rep).unwrap();
     assert_eq!(int.to_string(), rep);
+    assert_eq!(format!("{:.2}", int.to_string()), to_2);
 
     let rep = "100000000000000000000000000000000000000";
     let int = LargeInt::from_str(rep).unwrap();
     assert_eq!(int, LargeInt::from(100000000000000000000000000000000000000u128));
+
+    let int = LargeInt::from(541);
+    assert_eq!(int.to_string(), "541");
+    assert_eq!(format!("{:.1}", int.to_string()), "5.4e2");
 }
 
 #[test]
