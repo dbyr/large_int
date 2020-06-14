@@ -8,6 +8,6 @@ repository = "https://github.com/dbyr/large_int"
 homepage = "https://github.com/dbyr/large_int"
 readme = "README.md"
 keywords = ["unsigned", "int", "large", "unbounded", "integer"]
-categories = ["Data structures", "Encoding"]
+categories = ["data-structures", "encoding"]
 license = "MIT OR Apache-2.0"
 exclude = [".github*", ".gitignore"]
