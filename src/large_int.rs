@@ -676,7 +676,8 @@ macro_rules! ops {
             type Output = LargeInt;
 
             fn $op_name(self, other: LargeInt) -> LargeInt {
-                ex_expr!(other $op self)
+                let lhs = LargeInt::from(self);
+                ex_expr!(lhs $op other)
             }
         })*
     };

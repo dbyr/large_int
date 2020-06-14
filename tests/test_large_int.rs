@@ -47,6 +47,14 @@ fn test_division() {
     let lhs = LargeInt::from_str("340282366920938463463374607431768211465").unwrap();
     let rhs = LargeInt::from_str("100000000000000000000000000000000000000").unwrap();
     assert_eq!(lhs / rhs, LargeInt::from(3));
+                                 
+    let lhs = LargeInt::from_str("-8000000000000000000000000000000000000000000000000").unwrap();
+    let rhs = LargeInt::from_str("100000000000000000000000000000000000000").unwrap();
+    assert_eq!(lhs / rhs, LargeInt::from(-80000000000i128));
+
+    let lhs = LargeInt::from_str("-8000000000000000000000000000000000000000000000000").unwrap();
+    let rhs = LargeInt::from_str("-80000").unwrap();
+    assert_eq!(lhs / rhs, LargeInt::from_str("100000000000000000000000000000000000000000000").unwrap());
 }
 
 #[test]
