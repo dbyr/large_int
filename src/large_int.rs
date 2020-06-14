@@ -544,7 +544,7 @@ impl Display for LargeInt {
         }
         let keep_going: Box<dyn Fn(usize) -> bool>
         = if let Some(precision) = f.precision() {
-            Box::new(move |i| i > precision)
+            Box::new(move |i| i <= precision)
         } else {
             Box::new(|_| true)
         };
@@ -571,15 +571,27 @@ impl Display for LargeInt {
         // deal with precision and two special cases
         // these cases need to be handled specially because of the
         // two's complement problem
-        if let Some(_) = f.precision() {
-            if result == "" {
-                result.push_str("0.0e");
+        if let Some(precision) = f.precision() {
+            let length = if result == "" {
+                power = 0;
+                result.push_str("0.0");
+                result.len() - 2
             } else if result == "-" {
-                result.push_str("1.0e");
+                power = 0;
+                result.push_str("1.0");
+                result.len() - 3
+            } else if &result[0..=0] == "-" {
+                result.insert(2, '.');
+                result.len() - 3
             } else {
                 result.insert(1, '.');
-                result.push('e');
+                result.len() - 2
+            };
+            if length < precision {
+                let remaining = precision - length;
+                result.push_str(&"0".repeat(remaining));
             }
+            result.push('e');
             result.push_str(&power.to_string());
         } else {
             if result == "" {
@@ -588,7 +600,7 @@ impl Display for LargeInt {
                 result.push('1');
             }
         }
-        write!(f, "{}", result)
+        f.write_str(&result)
     }
 }
 

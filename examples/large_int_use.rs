@@ -12,14 +12,20 @@ fn main() {
     // on integers greater than u128::MAX
     let big_num = LargeInt::from(u128::MAX);
     let bigger_num: LargeInt = big_num.clone() + 1;
-    println!("{} > u128::MAX (={})!", bigger_num.to_string(), u128::MAX.to_string());
+    println!("{} > u128::MAX (={})!", bigger_num, u128::MAX);
     assert!(bigger_num > big_num);
 
     println!();
     let huge_num = big_num * u128::MAX;
     println!("Check out this number...");
-    println!("{}\nWow, that's definitely over 9000!", huge_num.to_string());
-    println!("Takes a while to print though... Better use primitives unless you need something bigger!");
+    println!("{}\nWow, that's definitely over 9000!", huge_num);
+    println!("Takes a while to print though...");
+
+    // printing in scientific notation will be faster because there
+    // are less digits to calculate. format like floats, where the
+    // precision is the number of decmial places
+    println!("So you can use scientific notation as well!");
+    println!("{:.3}", huge_num);
 
     // integers that are unbounded in both positive and negative
     println!("");

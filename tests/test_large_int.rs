@@ -10,7 +10,7 @@ fn test_string_conversions() {
     let to_2 = "7.77e50";
     let int = LargeInt::from_str(rep).unwrap();
     assert_eq!(int.to_string(), rep);
-    assert_eq!(format!("{:.2}", int.to_string()), to_2);
+    assert_eq!(format!("{:.2}", int), to_2);
 
     let rep = "100000000000000000000000000000000000000";
     let int = LargeInt::from_str(rep).unwrap();
@@ -18,7 +18,18 @@ fn test_string_conversions() {
 
     let int = LargeInt::from(541);
     assert_eq!(int.to_string(), "541");
-    assert_eq!(format!("{:.1}", int.to_string()), "5.4e2");
+    assert_eq!(format!("{:.1}", int), "5.4e2");
+    assert_eq!(format!("{:.5}", int), "5.41000e2");
+
+    let int = LargeInt::from(-3451);
+    assert_eq!(format!("{}", int), "-3451");
+    assert_eq!(format!("{:.1}", int), "-3.4e3");
+    assert_eq!(format!("{:.9}", int), "-3.451000000e3");
+
+    let int = LargeInt::from(0);
+    assert_eq!(format!("{:.4}", int), "0.0000e0");
+    let int = LargeInt::from(-1);
+    assert_eq!(format!("{:.2}", int), "-1.00e0");
 }
 
 #[test]
