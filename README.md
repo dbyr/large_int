@@ -9,6 +9,26 @@ See the example folder for an example on how to use the LargeInt type. Long stor
 
 LargeInt can be initialised from strings (`LargeInt::from_str("123")`) or primitive signed or unsigned integers (`LargeInt::from(123)`).
 
+#### Example
+```
+use large_int::large_int::LargeInt;
+
+fn main() {
+    let mut li = LargeInt::from_str("340282366920938463463374607431768211455").unwrap();
+    li += 20451;
+    assert_eq!(li, LargeInt::from_str("340282366920938463463374607431768231906").unwrap());
+
+    let smaller = li / 100000000000000000000000000000000_u128;
+    assert_eq!(smaller, 3402823_u128.into());
+
+    let multed = smaller * 3;
+    assert_eq!(multed, 10208469.into());
+
+    let subbed = multed - 20000000;
+    assert_eq!(subbed, -10208459.into());
+}
+```
+
 ### Operations Limitations
 Add and Sub are the simplest and least expensive operations and are completed in _O(n)_ time for a number represented with _n_ u128 values (assuming the number being added to it is sized <=_n_).
 
@@ -21,3 +41,23 @@ Shifting operators (i.e. << and >>) do not change the number of u128 values used
 In order to abstract the representation of the numbers the "_op_\_no\_shrink" methods have been kept private.
 
 The Div (/) and Rem (%) operators perform the same operation but return different values. If both values are desired it's better to use the "div\_with\_remainder" method that returns both values as a pair (result, remainder), rather than to call both Div and Rem separately, since this will double the time taken.
+
+## Change Log
+### 0.2.1
+Ammended the exclusion of `TryFrom` for unsigned integer types.
+
+Additionally the `div_with_remainder` method was made generic such that it now supports both primitives and other `LargeInt`s (and any other type implementing `Into<LargeInt>`).
+
+### 0.2.0
+Added extra generic traits `Default`, `Eq`, `Hash`, `Ord`, `LowerExp`. Also added iterator traits `Sum` and `Product`.
+
+New functionality implemented `TryFrom` trait for all primitive int types. Unsigned ints were excluded by mistake.
+
+More new functionality included mirror methods for the primitive integer types, `pow` and `abs`.
+
+
+### 0.1.0 (First release)
+Initial release included most of the standard `std::ops` operators. The base functionality was complete and included in this release.
+
+### 1.0.0 (Yanked initial version)
+This version was yanked due to issues with the categorisation on crate.io (after yanking I also realised the version should probably not be 1 yet).

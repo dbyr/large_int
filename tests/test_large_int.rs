@@ -34,8 +34,23 @@ fn test_string_conversions() {
     let int = LargeInt::from(-1);
     assert_eq!(format!("{:.2}", int), "-1.00e0");
     assert_eq!(format!("{:e}", int), "-1.0e0");
+}
 
+#[test]
+fn test_addition() {
+    let mut li = LargeInt::from_str("340282366920938463463374607431768211455").unwrap();
+    li += 20451;
+    assert_eq!(li, LargeInt::from_str("340282366920938463463374607431768231906").unwrap());
 
+    li += LargeInt::from_str("-340282366920938463463374607431768000000").unwrap();
+    assert_eq!(li, 231906.into());
+}
+
+#[test]
+fn test_subtraction() {
+    let mut li = LargeInt::from_str("340282366920938463463374607431769211455").unwrap();
+    li -= LargeInt::from_str("340282366920938463463374607431769211455").unwrap() * 2;
+    assert_eq!(li, LargeInt::from_str("-340282366920938463463374607431769211455").unwrap());
 }
 
 #[test]

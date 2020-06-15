@@ -6,9 +6,9 @@ use std::u128;
 
 // store a vector of little-endian, 2's compliment figures
 // the sign bit is in the most significant figure (more[0])
-// littel endian was chosen so vec operations are faster
+// little endian was chosen so vec operations are faster
 
-/// An unsigned integer that is unbounded in both positive
+/// A signed integer that is unbounded in both positive
 /// and negative.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct LargeInt {
