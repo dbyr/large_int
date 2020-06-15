@@ -324,8 +324,8 @@ impl LargeInt {
     /// 
     /// # Panics
     /// Panics if other is 0
-    pub fn div_with_remainder(self, other: LargeInt) -> (LargeInt, LargeInt) {
-        let (mut result, mut remainder) = self.div_with_remainder_no_shrink(other);
+    pub fn div_with_remainder<T: Into<LargeInt>>(self, other: T) -> (LargeInt, LargeInt) {
+        let (mut result, mut remainder) = self.div_with_remainder_no_shrink(other.into());
         result.shrink();
         remainder.shrink();
         (result, remainder)
@@ -1138,6 +1138,19 @@ macro_rules! from_unsigned {
             }
         })*
 
+        // allow attempting to transform into primitives
+        $(impl TryFrom<LargeInt> for $t {
+            type Error = String;
+
+            fn try_from(val: LargeInt) -> Result<$t, Self::Error> {
+                if val >= LargeInt::from($t::MIN) && val <= LargeInt::from($t::MAX) {
+                    Ok(val.bytes[0] as $t)
+                } else {
+                    Err(format!("Value is not in the bound {} <= val <= {}", $t::MIN, $t::MAX))
+                }
+            }
+        })*
+
         #[cfg(test)]
         mod from_unsigned_tests {
             use crate::large_int::{
@@ -1145,6 +1158,7 @@ macro_rules! from_unsigned {
             };
             
             $(use std::$t;)*
+            use std::convert::TryFrom;
 
             #[test]
             fn test_from_unsigned() {
@@ -1169,6 +1183,32 @@ macro_rules! from_unsigned {
                 assert!(!li.is_negative());)*
 
                 assert!(tested_others && tested_u128);
+            }
+
+            #[test]
+            fn test_try_from_unsigned() {
+                $(
+                    let li = LargeInt::from($t::MAX);
+                    assert_eq!($t::MAX, $t::try_from(li).unwrap());
+                    let li = LargeInt::from($t::MIN);
+                    assert_eq!($t::MIN, $t::try_from(li).unwrap());
+    
+                    let li = LargeInt::from(0);
+                    assert_eq!(0 as $t, $t::try_from(li).unwrap());
+                    let li = LargeInt::from(127);
+                    assert_eq!(127 as $t, $t::try_from(li).unwrap());
+    
+                    let li = LargeInt::from($t::MAX) + 1;
+                    assert_eq!(
+                        Err(format!("Value is not in the bound {} <= val <= {}", $t::MIN, $t::MAX)),
+                        $t::try_from(li)
+                    );
+                    let li = LargeInt::from($t::MIN) - 1;
+                    assert_eq!(
+                        Err(format!("Value is not in the bound {} <= val <= {}", $t::MIN, $t::MAX)),
+                        $t::try_from(li)
+                    );
+                    )*
             }
         }
     };
@@ -1231,7 +1271,7 @@ macro_rules! from_signed {
             }
 
             #[test]
-            fn test_try_from() {
+            fn test_try_from_signed() {
                 $(
                 let li = LargeInt::from($t::MAX);
                 assert_eq!($t::MAX, $t::try_from(li).unwrap());

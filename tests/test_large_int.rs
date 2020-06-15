@@ -80,6 +80,19 @@ fn test_division() {
     let lhs = LargeInt::from_str("-8000000000000000000000000000000000000000000000000").unwrap();
     let rhs = LargeInt::from_str("-80000").unwrap();
     assert_eq!(lhs / rhs, LargeInt::from_str("100000000000000000000000000000000000000000000").unwrap());
+
+    let lhs = LargeInt::from(43);
+    let rhs = LargeInt::from(20);
+    let (result, remainder) = lhs.div_with_remainder(rhs);
+    assert_eq!(result, 2.into());
+    assert_eq!(remainder, 3.into());
+
+    // ensure works with primitives too
+    let lhs = LargeInt::from(43);
+    let rhs = 20;
+    let (result, remainder) = lhs.div_with_remainder(rhs);
+    assert_eq!(result, 2.into());
+    assert_eq!(remainder, 3.into());
 }
 
 #[test]
