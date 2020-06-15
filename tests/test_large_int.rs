@@ -20,16 +20,22 @@ fn test_string_conversions() {
     assert_eq!(int.to_string(), "541");
     assert_eq!(format!("{:.1}", int), "5.4e2");
     assert_eq!(format!("{:.5}", int), "5.41000e2");
+    assert_eq!(format!("{:e}", int), "5.4e2");
 
     let int = LargeInt::from(-3451);
     assert_eq!(format!("{}", int), "-3451");
-    assert_eq!(format!("{:.1}", int), "-3.4e3");
+    assert_eq!(format!("{:.2}", int), "-3.45e3");
     assert_eq!(format!("{:.9}", int), "-3.451000000e3");
+    assert_eq!(format!("{:e}", int), "-3.4e3");
 
     let int = LargeInt::from(0);
     assert_eq!(format!("{:.4}", int), "0.0000e0");
+    assert_eq!(format!("{:e}", int), "0.0e0");
     let int = LargeInt::from(-1);
     assert_eq!(format!("{:.2}", int), "-1.00e0");
+    assert_eq!(format!("{:e}", int), "-1.0e0");
+
+
 }
 
 #[test]
@@ -46,6 +52,9 @@ fn test_multiplication() {
     assert!(i128::MAX == -(i128::MIN + 1));
     assert!(pos == two_neg);
     assert!(pos == -neg);
+
+    let zero = LargeInt::from(0);
+    assert_eq!(pos * zero, LargeInt::from(0));
 }
 
 #[test]
@@ -78,4 +87,80 @@ fn test_remainder() {
     let lhs = LargeInt::from_str("340282366920938463463374607431768211465").unwrap();
     let rhs = LargeInt::from_str("100000000000000000000000000000000000000").unwrap();
     assert_eq!(lhs % rhs, LargeInt::from_str("40282366920938463463374607431768211465").unwrap());
+
+    let lhs = LargeInt::from_str("-340282366920938463463374607431768211465").unwrap();
+    let rhs = LargeInt::from_str("100000000000000000000000000000000000000").unwrap();
+    assert_eq!(lhs % rhs, LargeInt::from_str("40282366920938463463374607431768211465").unwrap());
+}
+
+#[test]
+fn test_default() {
+    let def = LargeInt::default();
+    let zero = LargeInt::new();
+    assert_eq!(def, zero);
+}
+
+#[test]
+fn test_abs() {
+    let neg = LargeInt::from_str("-8000000000000000000000000000000000000000000000000").unwrap();
+    let pos = LargeInt::from_str("8000000000000000000000000000000000000000000000000").unwrap();
+    assert_eq!(neg.abs(), pos.abs());
+    assert_eq!(pos.abs().to_string(), "8000000000000000000000000000000000000000000000000");
+}
+
+#[test]
+fn test_pow() {
+    let pos = LargeInt::from(3);
+    assert_eq!(pos.pow(3), LargeInt::from(27));
+    assert_eq!(pos.pow(4), LargeInt::from(81));
+
+    let neg = LargeInt::from(-3);
+    assert_eq!(neg.pow(3), LargeInt::from(-27));
+    assert_eq!(neg.pow(4), LargeInt::from(81));
+
+    let pos = LargeInt::from(4);
+    assert_eq!(pos.pow(13), LargeInt::from(67_108_864));
+
+    let large = LargeInt::from(10);
+    assert_eq!(large.pow(40), LargeInt::from_str("10000000000000000000000000000000000000000").unwrap());
+}
+
+#[test]
+fn test_iter_ops() {
+    let vals: Vec<LargeInt> = vec!(
+        LargeInt::from(1),
+        LargeInt::from(2),
+        LargeInt::from(3),
+        LargeInt::from(4)
+    );
+    let sum: LargeInt = vals.iter().sum();
+    let product: LargeInt = vals.iter().product();
+    assert_eq!(sum, LargeInt::from(10));
+    assert_eq!(product, LargeInt::from(24));
+
+    let sum: LargeInt = vals.into_iter().sum();
+    assert_eq!(sum, LargeInt::from(10));
+
+    let vals: Vec<LargeInt> = vec!();
+    let sum: LargeInt = vals.iter().sum();
+    let product: LargeInt = vals.iter().product();
+    assert_eq!(sum, LargeInt::from(0));
+    assert_eq!(product, LargeInt::from(0));
+
+    let sum: LargeInt = vals.into_iter().sum();
+    assert_eq!(sum, LargeInt::from(0));
+
+    let vals: Vec<LargeInt> = vec!(
+        LargeInt::from(-1),
+        LargeInt::from(2),
+        LargeInt::from(3),
+        LargeInt::from(4)
+    );
+    let sum: LargeInt = vals.iter().sum();
+    let product: LargeInt = vals.iter().product();
+    assert_eq!(sum, LargeInt::from(8));
+    assert_eq!(product, LargeInt::from(-24));
+
+    let product: LargeInt = vals.into_iter().product();
+    assert_eq!(product, LargeInt::from(-24));
 }

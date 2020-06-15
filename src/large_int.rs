@@ -1,11 +1,30 @@
-use std::u128;
 use std::str::FromStr;
+use std::convert::TryFrom;
 use std::cmp::Ordering;
 use std::num::ParseIntError;
+use std::iter::{
+    Sum,
+    Product
+};
 use std::fmt::{
     Display,
     Formatter,
-    Result as FmtResult
+    Result as FmtResult,
+    LowerExp
+};
+use std::{
+    u128,
+    i128,
+    u64,
+    i64,
+    u32,
+    i32,
+    u16,
+    i16,
+    u8,
+    i8,
+    usize,
+    isize
 };
 use std::ops::{
     Add,
@@ -38,7 +57,7 @@ use std::ops::{
 
 /// An unsigned integer that is unbounded in both positive
 /// and negative.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct LargeInt {
     // use u128 since, if someone needs a LargeInt, it's likely
     // going to end up larger than u128::MAX
@@ -111,6 +130,56 @@ impl LargeInt {
         !self.is_negative()
     }
 
+    /// Calculates the absolute value of this LargeInt
+    /// 
+    /// # Examples
+    /// ```
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let neg = LargeInt::from(-1).abs();
+    /// let pos = LargeInt::from(1).abs();
+    /// assert!(neg == pos);
+    /// ```
+    /// 
+    /// Returns the absolute value as a LargeInt
+    pub fn abs(&self) -> LargeInt {
+        if self.is_negative() {
+            -self.clone()
+        } else {
+            self.clone()
+        }
+    }
+
+    /// Calculates this LargeInt to the power given
+    /// 
+    /// # Examples
+    /// ```
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let val = LargeInt::from(3);
+    /// assert!(val.pow(3) == LargeInt::from(27));
+    /// ```
+    /// 
+    /// Returns this LargeInt to the power given as a LargeInt
+    pub fn pow(&self, exp: u32) -> LargeInt {
+        let mut result = LargeInt::from(1);
+        let mut mask = 1u32;
+        let mask_max = 1u32 << 31;
+        let mask_min = 1u32;
+        while mask != mask_max && mask << 1 <= exp {
+            mask <<= 1;
+        }
+        loop {
+            result *= result.clone();
+            if exp & mask > 0 {
+                result *= self.clone();
+            }
+            if mask == mask_min { break; }
+            mask >>= 1;
+        }
+        result
+    }
+
     fn shrink(&mut self) {
         let (remove_chunk, checker): (u128, Box<dyn Fn(u128) -> bool>) = 
         if self.is_negative() {
@@ -159,19 +228,7 @@ impl LargeInt {
         compliment + 1
     }
 
-    /// Counts the number of 1's in the binary representation
-    /// of this LargeInt
-    /// 
-    /// # Examples
-    /// ```
-    /// use large_int::large_int::LargeInt;
-    /// 
-    /// let two = LargeInt::from(2);
-    /// assert!(two.count_ones() == 1);
-    /// ```
-    /// 
-    /// Returns the number of 1's in this binary representation
-    pub fn count_ones(&self) -> u32 {
+    fn count_ones(&self) -> u32 {
         let mut count = 0;
         for byte in self.bytes.iter() {
             count += byte.count_ones();
@@ -316,6 +373,24 @@ impl LargeInt {
             result = result.compliment();
         }
         (result, remainder)
+    }
+}
+
+impl Default for LargeInt {
+    /// Returns a default LargeInt (default == 0)
+    /// 
+    /// # Examples
+    /// ```
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let zero = LargeInt::new();
+    /// let default = LargeInt::default();
+    /// assert!(zero == default);
+    /// ```
+    /// 
+    /// Returns the default LargeInt (0)
+    fn default() -> LargeInt {
+        LargeInt::new()
     }
 }
 
@@ -819,6 +894,25 @@ impl Not for LargeInt {
     }
 }
 
+impl Ord for LargeInt {
+    /// Determines if a LargeInt is larger, equal or greater than another.
+    /// 
+    /// # Examples
+    /// ```
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let five = LargeInt::from(5);
+    /// let four = LargeInt::from(4);
+    /// assert!(five > four);
+    /// assert!(four < five);
+    /// ```
+    /// 
+    /// Returns an ordering of the comparison
+    fn cmp(&self, other: &LargeInt) -> Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
+
 impl PartialOrd for LargeInt {
     /// Determines if a LargeInt is larger, equal or greater than another.
     /// 
@@ -841,6 +935,58 @@ impl PartialOrd for LargeInt {
             Some(Ordering::Less)
         } else {
             Some(Ordering::Greater)
+        }
+    }
+}
+
+impl Sum for LargeInt {
+    fn sum<I: Iterator<Item = LargeInt>>(iter: I) -> LargeInt {
+        let mut sum = LargeInt::default();
+        for item in iter {
+            sum += item;
+        }
+        sum
+    }
+}
+
+impl<'a> Sum<&'a LargeInt> for LargeInt {
+    fn sum<I: Iterator<Item = &'a LargeInt>>(iter: I) -> LargeInt {
+        let mut sum = LargeInt::default();
+        for item in iter {
+            sum += item.clone();
+        }
+        sum
+    }
+}
+
+impl Product for LargeInt {
+    fn product<I: Iterator<Item = LargeInt>>(iter: I) -> LargeInt {
+        let mut product = LargeInt::from(1);
+        let mut looped = false;
+        for item in iter {
+            product *= item;
+            looped = true;
+        }
+        if looped {
+            product
+        } else {
+            LargeInt::from(0)
+        }
+    }
+}
+
+impl<'a> Product<&'a LargeInt> for LargeInt {
+    fn product<I: Iterator<Item = &'a LargeInt>>(iter: I) -> LargeInt {
+        let mut product = LargeInt::from(1);
+        let mut looped = false;
+        for item in iter {
+            product *= item.clone();
+            looped = true;
+        }
+        if looped {
+            product
+        } else {
+            LargeInt::from(0)
         }
     }
 }
@@ -973,6 +1119,12 @@ impl Display for LargeInt {
     }
 }
 
+impl LowerExp for LargeInt {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        write!(f, "{:.1}", self)
+    }
+}
+
 macro_rules! from_unsigned {
     ( $($t:ident)* ) => {
         $(impl From<$t> for LargeInt {
@@ -1039,18 +1191,33 @@ macro_rules! from_signed {
             }
         })*
 
+        // allow attempting to transform into primitives
+        $(impl TryFrom<LargeInt> for $t {
+            type Error = String;
+
+            fn try_from(val: LargeInt) -> Result<$t, Self::Error> {
+                if val >= LargeInt::from($t::MIN) && val <= LargeInt::from($t::MAX) {
+                    Ok(val.bytes[0] as $t)
+                } else {
+                    Err(format!("Value is not in the bound {} <= val <= {}", $t::MIN, $t::MAX))
+                }
+            }
+        })*
+
         #[cfg(test)]
         mod from_signed_tests {
             use crate::large_int::{
                 LargeInt
             };
+            use std::convert::TryFrom;
             
             use std::u128;
             $(use std::$t;)*
 
             #[test]
             fn test_from_signed() {
-                $(let li = LargeInt::from(127 as $t);
+                $(
+                let li = LargeInt::from(127 as $t);
                 assert_eq!(li.bytes[0], 127u128);
                 assert!(li.is_positive());
 
@@ -1060,6 +1227,32 @@ macro_rules! from_signed {
                 assert!(li.is_negative());
 
                 assert!(LargeInt::from($t::MIN).is_negative());
+                )*
+            }
+
+            #[test]
+            fn test_try_from() {
+                $(
+                let li = LargeInt::from($t::MAX);
+                assert_eq!($t::MAX, $t::try_from(li).unwrap());
+                let li = LargeInt::from($t::MIN);
+                assert_eq!($t::MIN, $t::try_from(li).unwrap());
+
+                let li = LargeInt::from(0);
+                assert_eq!(0 as $t, $t::try_from(li).unwrap());
+                let li = LargeInt::from(127);
+                assert_eq!(127 as $t, $t::try_from(li).unwrap());
+
+                let li = LargeInt::from($t::MAX) + 1;
+                assert_eq!(
+                    Err(format!("Value is not in the bound {} <= val <= {}", $t::MIN, $t::MAX)),
+                    $t::try_from(li)
+                );
+                let li = LargeInt::from($t::MIN) - 1;
+                assert_eq!(
+                    Err(format!("Value is not in the bound {} <= val <= {}", $t::MIN, $t::MAX)),
+                    $t::try_from(li)
+                );
                 )*
             }
         }
@@ -1121,10 +1314,10 @@ macro_rules! ops {
     };
 }
 
-from_signed!(i8 i32 i64 i128 isize);
-from_unsigned!(u8 u32 u64 u128 usize);
+from_signed!(i8 i16 i32 i64 i128 isize);
+from_unsigned!(u8 u16 u32 u64 u128 usize);
 ops!(
-    for i8 i32 i64 i128 isize u8 u32 u64 u128 usize -> impl
+    for i8 i16 i32 i64 i128 isize u8 u16 u32 u64 u128 usize -> impl
     Add(add <-> +) and AddAssign(add_assign),
     Sub(sub <-> -) and SubAssign(sub_assign),
     Mul(mul <-> *) and MulAssign(mul_assign),
