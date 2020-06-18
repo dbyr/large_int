@@ -44,5 +44,6 @@ fn main() {
     println!("bitwise ops, too! -> {}", negatives_too | bigger_than_literal);
 
     // and they can interact with primitives with ease
-    assert_eq!(500 / LargeInt::from(5), LargeInt::from(100));
+    assert_eq!(500 / LargeInt::from(5), 100);
+    assert!(LargeInt::from(345431) > 513);
 }

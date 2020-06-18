@@ -43,6 +43,11 @@ In order to abstract the representation of the numbers the "_op_\_no\_shrink" me
 The Div (/) and Rem (%) operators perform the same operation but return different values. If both values are desired it's better to use the "div\_with\_remainder" method that returns both values as a pair (result, remainder), rather than to call both Div and Rem separately, since this will double the time taken.
 
 ## Change Log
+### 0.2.2
+Adds the ability to use primitives as the first/left argument for operations.
+
+Changed implementation such that any type implementing `Into<LargeInt>` (i.e. `From<type> for LargeInt`) can be used with LargeInts. In order to support being the left argument of the operation, use the macro `reverse_operations`. 
+
 ### 0.2.1
 Ammended the exclusion of `TryFrom` for unsigned integer types.
 

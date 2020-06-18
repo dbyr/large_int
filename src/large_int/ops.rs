@@ -30,7 +30,7 @@ use std::ops::{
     Not
 };
 
-impl Add for LargeInt {
+impl<T: Into<LargeInt>> Add<T> for LargeInt {
     type Output = LargeInt;
 
     /// Adds two LargeInts
@@ -45,14 +45,14 @@ impl Add for LargeInt {
     /// ```
     /// 
     /// Returns a LargeInt as the sum of the two LargeInts
-    fn add(self, other: LargeInt) -> LargeInt {
-        let mut result = self.add_no_shrink(other);
+    fn add(self, other: T) -> LargeInt {
+        let mut result = self.add_no_shrink(other.into());
         result.shrink();
         result
     }
 }
 
-impl AddAssign for LargeInt {
+impl<T: Into<LargeInt>> AddAssign<T> for LargeInt {
     /// Adds a LargeInt to this LargeInt
     /// 
     /// # Examples
@@ -64,12 +64,12 @@ impl AddAssign for LargeInt {
     /// ten += two;
     /// assert!(ten == LargeInt::from(12));
     /// ```
-    fn add_assign(&mut self, other: LargeInt) {
+    fn add_assign(&mut self, other: T) {
         self.bytes = (self.clone() + other).bytes;
     }
 }
 
-impl Sub for LargeInt {
+impl<T: Into<LargeInt>> Sub<T> for LargeInt {
     type Output = LargeInt;
 
     /// Subtracts a LargeInt from another
@@ -84,14 +84,14 @@ impl Sub for LargeInt {
     /// ```
     /// 
     /// Returns self minus other as a LargeInt
-    fn sub(self, other: LargeInt) -> LargeInt {
-        let mut result = self.sub_no_shrink(other);
+    fn sub(self, other: T) -> LargeInt {
+        let mut result = self.sub_no_shrink(other.into());
         result.shrink();
         result
     }
 }
 
-impl SubAssign for LargeInt {
+impl<T: Into<LargeInt>> SubAssign<T> for LargeInt {
     /// Subtracts a LargeInt from this LargeInt
     /// 
     /// # Examples
@@ -103,12 +103,12 @@ impl SubAssign for LargeInt {
     /// ten -= two;
     /// assert!(ten == LargeInt::from(8));
     /// ```
-    fn sub_assign(&mut self, other: LargeInt) {
+    fn sub_assign(&mut self, other: T) {
         self.bytes = (self.clone() - other).bytes;
     }
 }
 
-impl Mul for LargeInt {
+impl<T: Into<LargeInt>> Mul<T> for LargeInt {
     type Output = LargeInt;
 
     /// Multiplies two LargeInts
@@ -123,14 +123,14 @@ impl Mul for LargeInt {
     /// ```
     /// 
     /// Returns a LargeInt that is the product of the two LargeInts given
-    fn mul(self, other: LargeInt) -> LargeInt {
-        let mut result = self.mul_no_shrink(other);
+    fn mul(self, other: T) -> LargeInt {
+        let mut result = self.mul_no_shrink(other.into());
         result.shrink();
         result
     }
 }
 
-impl MulAssign for LargeInt {
+impl<T: Into<LargeInt>> MulAssign<T> for LargeInt {
     /// Multiplies this LargeInt by another
     /// 
     /// # Examples
@@ -142,12 +142,12 @@ impl MulAssign for LargeInt {
     /// ten *= two;
     /// assert!(ten == LargeInt::from(20));
     /// ```
-    fn mul_assign(&mut self, rhs: LargeInt) {
+    fn mul_assign(&mut self, rhs: T) {
         self.bytes = (self.clone() * rhs).bytes;
     }
 }
 
-impl Div for LargeInt {
+impl<T: Into<LargeInt>> Div<T> for LargeInt {
     type Output = LargeInt;
 
     /// Divides a LargeInt by another
@@ -165,12 +165,12 @@ impl Div for LargeInt {
     /// 
     /// # Panics
     /// Panics if other is 0
-    fn div(self, other: LargeInt) -> LargeInt {
+    fn div(self, other: T) -> LargeInt {
         self.div_with_remainder(other).0
     }
 }
 
-impl DivAssign for LargeInt {
+impl<T: Into<LargeInt>> DivAssign<T> for LargeInt {
     /// Divides this LargeInt by another
     /// 
     /// # Examples
@@ -185,12 +185,12 @@ impl DivAssign for LargeInt {
     /// 
     /// # Panics
     /// Panics if other is 0
-    fn div_assign(&mut self, other: LargeInt) {
+    fn div_assign(&mut self, other: T) {
         self.bytes = (self.clone() / other).bytes;
     }
 }
 
-impl Rem for LargeInt {
+impl<T: Into<LargeInt>> Rem<T> for LargeInt {
     type Output = LargeInt;
 
     /// Gets the remainder of a division operation
@@ -205,12 +205,12 @@ impl Rem for LargeInt {
     /// ```
     /// 
     /// Returns the remainder as a LargeInt
-    fn rem(self, other: LargeInt) -> LargeInt {
+    fn rem(self, other: T) -> LargeInt {
         self.div_with_remainder(other).1
     }
 }
 
-impl RemAssign for LargeInt {
+impl<T: Into<LargeInt>> RemAssign<T> for LargeInt {
     /// Assigns the remainder of this LargeInt divided by another
     /// 
     /// # Examples
@@ -222,12 +222,12 @@ impl RemAssign for LargeInt {
     /// eleven %= five;
     /// assert!(eleven == LargeInt::from(1));
     /// ```
-    fn rem_assign(&mut self, other: LargeInt) {
+    fn rem_assign(&mut self, other: T) {
         self.bytes = (self.clone() % other).bytes;
     }
 }
 
-impl BitAnd for LargeInt {
+impl<T: Into<LargeInt>> BitAnd<T> for LargeInt {
     type Output = LargeInt;
 
     /// Performs a bitwise and on two LargeInts
@@ -242,21 +242,22 @@ impl BitAnd for LargeInt {
     /// ```
     /// 
     /// Returns the bitwise and as a LargeInt
-    fn bitand(mut self, mut rhs: LargeInt) -> LargeInt {
-        let size = self.bytes.len().max(rhs.bytes.len());
+    fn bitand(mut self, rhs: T) -> LargeInt {
+        let mut other = rhs.into();
+        let size = self.bytes.len().max(other.bytes.len());
         let mut result = LargeInt::with_size(size);
         self.expand_to_ignore_sign(size);
-        rhs.expand_to_ignore_sign(size);
+        other.expand_to_ignore_sign(size);
 
         for i in 0..size {
-            result.bytes[i] = self.bytes[i] & rhs.bytes[i];
+            result.bytes[i] = self.bytes[i] & other.bytes[i];
         }
         result.shrink();
         result
     }
 }
 
-impl BitAndAssign for LargeInt {
+impl<T: Into<LargeInt>> BitAndAssign<T> for LargeInt {
     /// Bitwise ands this LargeInt with another
     /// 
     /// # Examples
@@ -268,12 +269,12 @@ impl BitAndAssign for LargeInt {
     /// three &= two;
     /// assert!(three == LargeInt::from(2));
     /// ```
-    fn bitand_assign(&mut self, rhs: LargeInt) {
+    fn bitand_assign(&mut self, rhs: T) {
         self.bytes = (self.clone() & rhs).bytes;
     }
 }
 
-impl BitOr for LargeInt {
+impl<T: Into<LargeInt>> BitOr<T> for LargeInt {
     type Output = LargeInt;
 
     /// Bitwise ors two LargeInts
@@ -288,21 +289,22 @@ impl BitOr for LargeInt {
     /// ```
     /// 
     /// Returns the bitwise or as a LargeInt
-    fn bitor(mut self, mut rhs: LargeInt) -> LargeInt {
-        let size = self.bytes.len().max(rhs.bytes.len());
+    fn bitor(mut self, rhs: T) -> LargeInt {
+        let mut other = rhs.into();
+        let size = self.bytes.len().max(other.bytes.len());
         let mut result = LargeInt::with_size(size);
         self.expand_to_ignore_sign(size);
-        rhs.expand_to_ignore_sign(size);
+        other.expand_to_ignore_sign(size);
 
         for i in 0..size {
-            result.bytes[i] = self.bytes[i] | rhs.bytes[i];
+            result.bytes[i] = self.bytes[i] | other.bytes[i];
         }
         result.shrink();
         result
     }
 }
 
-impl BitOrAssign for LargeInt {
+impl<T: Into<LargeInt>> BitOrAssign<T> for LargeInt {
     /// Bitwise ors this LargeInt with another
     /// 
     /// # Examples
@@ -314,7 +316,7 @@ impl BitOrAssign for LargeInt {
     /// five |= two;
     /// assert!(five == LargeInt::from(7));
     /// ```
-    fn bitor_assign(&mut self, rhs: LargeInt) {
+    fn bitor_assign(&mut self, rhs: T) {
         self.bytes = (self.clone() | rhs).bytes;
     }
 }
@@ -462,7 +464,7 @@ impl Neg for LargeInt {
     }
 }
 
-impl BitXor for LargeInt {
+impl<T: Into<LargeInt>> BitXor<T> for LargeInt {
     type Output = LargeInt;
 
     /// Bitwise xors two LargeInts
@@ -477,19 +479,20 @@ impl BitXor for LargeInt {
     /// ```
     /// 
     /// Returns the bitwise xor as a LargeInt
-    fn bitxor(mut self, mut other: LargeInt) -> LargeInt {
-        let size = self.bytes.len().max(other.bytes.len());
+    fn bitxor(mut self, other: T) -> LargeInt {
+        let mut rhs = other.into();
+        let size = self.bytes.len().max(rhs.bytes.len());
         let mut result = LargeInt::with_size(size);
         self.expand_to_ignore_sign(size);
-        other.expand_to_ignore_sign(size);
+        rhs.expand_to_ignore_sign(size);
         for i in 0..size {
-            result.bytes[i] = self.bytes[i] ^ other.bytes[i];
+            result.bytes[i] = self.bytes[i] ^ rhs.bytes[i];
         }
         result
     }
 }
 
-impl BitXorAssign for LargeInt {
+impl<T: Into<LargeInt>> BitXorAssign<T> for LargeInt {
     /// Bitwise ors this LargeInt by another
     /// 
     /// # Examples
@@ -501,7 +504,7 @@ impl BitXorAssign for LargeInt {
     /// five ^= three;
     /// assert!(five == LargeInt::from(6));
     /// ```
-    fn bitxor_assign(&mut self, other: LargeInt) {
+    fn bitxor_assign(&mut self, other: T) {
         self.bytes = (self.clone() ^ other).bytes;
     }
 }
@@ -530,6 +533,26 @@ impl Not for LargeInt {
     }
 }
 
+impl<T: Into<LargeInt> + Clone> PartialEq<T> for LargeInt {
+    /// Determines if a LargeInt is equal to another integer.
+    /// 
+    /// # Examples
+    /// ```
+    /// use large_int::large_int::LargeInt;
+    /// 
+    /// let five = LargeInt::from(5);
+    /// let four = LargeInt::from(4);
+    /// assert_ne!(five, four);
+    /// assert_eq!(four, 4);
+    /// ```
+    /// 
+    /// Returns true if the values are equal, false otherwise.
+    fn eq(&self, other: &T) -> bool {
+        let oth: LargeInt = other.clone().into();
+        self.bytes == oth.bytes
+    }
+}
+
 impl Ord for LargeInt {
     /// Determines if a LargeInt is larger, equal or greater than another.
     /// 
@@ -549,8 +572,8 @@ impl Ord for LargeInt {
     }
 }
 
-impl PartialOrd for LargeInt {
-    /// Determines if a LargeInt is larger, equal or greater than another.
+impl<T: Into<LargeInt> + Clone> PartialOrd<T> for LargeInt {
+    /// Determines if a LargeInt is larger, equal or greater than another integer.
     /// 
     /// # Examples
     /// ```
@@ -559,12 +582,13 @@ impl PartialOrd for LargeInt {
     /// let five = LargeInt::from(5);
     /// let four = LargeInt::from(4);
     /// assert!(five > four);
-    /// assert!(four < five);
+    /// assert!(four < 5);
     /// ```
     /// 
     /// Returns an ordering of the comparison
-    fn partial_cmp(&self, other: &LargeInt) -> Option<Ordering> {
-        let tester = self.clone() - other.clone();
+    fn partial_cmp(&self, other: &T) -> Option<Ordering> {
+        let oth: LargeInt = other.clone().into();
+        let tester = self.clone() - oth;
         if tester == LargeInt::new() {
             Some(Ordering::Equal)
         } else if tester.is_negative() {
@@ -575,66 +599,72 @@ impl PartialOrd for LargeInt {
     }
 }
 
-macro_rules! ex_expr {
-    ( $e:expr ) => {
-        {$e}
-    };
-}
-
 // macro for implementing basic int operations for primitives
 // so use with LargeInt is natural
 macro_rules! ops {
     ( 
         for $($t:ident)* -> impl
-        $trait:ident($op_name:ident <-> $op:tt) 
-        and $assign_trait:ident($assign_op:ident)
+        $trait:ident($op_name:ident)
     ) => {
-        $(impl $trait<$t> for LargeInt {
-            type Output = LargeInt;
-
-            fn $op_name(self, other: $t) -> LargeInt {
-                let oth = LargeInt::from(other);
-                ex_expr!(self $op oth)
-            }
-        })*
-
-        $(impl $assign_trait<$t> for LargeInt {
-            fn $assign_op(&mut self, other: $t) {
-                self.bytes = ex_expr!(self.clone() $op other).bytes;
-            }
-        })*
-
-        // allow reverse operations too
         $(impl $trait<LargeInt> for $t {
             type Output = LargeInt;
 
             fn $op_name(self, other: LargeInt) -> LargeInt {
-                let lhs = LargeInt::from(self);
-                ex_expr!(lhs $op other)
+                let rep = LargeInt::from(self);
+                rep.$op_name(other)
             }
         })*
     };
 
     ( 
         for $($t:ident)* -> impl
-        $trait:ident($op_name:ident <-> $op:tt) 
-        and $assign_trait:ident($assign_op:ident), 
+        $trait:ident($op_name:ident), 
         $($remaining:tt)*
     ) => {
         ops!(
             for $($t)* -> impl
-            $trait($op_name <-> $op) 
-            and $assign_trait($assign_op)
+            $trait($op_name)
         );
         ops!(for $($t)* -> impl $($remaining)*);
     };
 }
 
-ops!(
-    for i8 i16 i32 i64 i128 isize u8 u16 u32 u64 u128 usize -> impl
-    Add(add <-> +) and AddAssign(add_assign),
-    Sub(sub <-> -) and SubAssign(sub_assign),
-    Mul(mul <-> *) and MulAssign(mul_assign),
-    Div(div <-> /) and DivAssign(div_assign),
-    Rem(rem <-> %) and RemAssign(rem_assign)
-);
+macro_rules! comparisons {
+    ( $($t:ident)* ) => {
+        $(impl PartialEq<LargeInt> for $t {
+            fn eq(&self, other: &LargeInt) -> bool {
+                let lhs: LargeInt = self.clone().into();
+                &lhs == other
+            }
+        })*
+
+        $(impl PartialOrd<LargeInt> for $t {
+            fn partial_cmp(&self, other: &LargeInt) -> Option<Ordering> {
+                let lhs: LargeInt = self.clone().into();
+                lhs.partial_cmp(other)
+            }
+        })*
+    };
+}
+
+#[macro_export]
+/// Macro to implement reverse operators for foreign types.
+/// Requires only that the type(s) being passed to the macro
+/// implement From<type> for LargeInt.
+macro_rules! reverse_operations {
+    ( $($t:ident)* ) => {
+        ops!(for $($t)* -> impl
+            Add(add),
+            Sub(sub),
+            Mul(mul),
+            Div(div),
+            Rem(rem),
+            BitOr(bitor),
+            BitAnd(bitand),
+            BitXor(bitxor)
+        );
+        comparisons!($($t)*);
+    };
+}
+
+reverse_operations!(i8 i16 i32 i64 i128 isize u8 u16 u32 u64 u128 usize);

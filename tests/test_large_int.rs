@@ -43,7 +43,10 @@ fn test_addition() {
     assert_eq!(li, LargeInt::from_str("340282366920938463463374607431768231906").unwrap());
 
     li += LargeInt::from_str("-340282366920938463463374607431768000000").unwrap();
-    assert_eq!(li, 231906.into());
+    assert_eq!(li, LargeInt::from(231906));
+
+    let rev = 16 + li;
+    assert_eq!(rev, LargeInt::from(231922));
 }
 
 #[test]
@@ -51,6 +54,9 @@ fn test_subtraction() {
     let mut li = LargeInt::from_str("340282366920938463463374607431769211455").unwrap();
     li -= LargeInt::from_str("340282366920938463463374607431769211455").unwrap() * 2;
     assert_eq!(li, LargeInt::from_str("-340282366920938463463374607431769211455").unwrap());
+
+    let rev = 11 + LargeInt::from(1234);
+    assert_eq!(rev, LargeInt::from(1245));
 }
 
 #[test]
@@ -70,6 +76,9 @@ fn test_multiplication() {
 
     let zero = LargeInt::from(0);
     assert_eq!(pos * zero, LargeInt::from(0));
+
+    let rev = 4 * LargeInt::from(9);
+    assert_eq!(rev, LargeInt::from(36));
 }
 
 #[test]
@@ -99,15 +108,18 @@ fn test_division() {
     let lhs = LargeInt::from(43);
     let rhs = LargeInt::from(20);
     let (result, remainder) = lhs.div_with_remainder(rhs);
-    assert_eq!(result, 2.into());
-    assert_eq!(remainder, 3.into());
+    assert_eq!(result, LargeInt::from(2));
+    assert_eq!(remainder, 3);
 
     // ensure works with primitives too
     let lhs = LargeInt::from(43);
     let rhs = 20;
     let (result, remainder) = lhs.div_with_remainder(rhs);
-    assert_eq!(result, 2.into());
-    assert_eq!(remainder, 3.into());
+    assert_eq!(result, 2);
+    assert_eq!(remainder, 3);
+
+    let rev = 12 / remainder;
+    assert_eq!(rev, 4);
 }
 
 #[test]
@@ -126,6 +138,16 @@ fn test_default() {
     let def = LargeInt::default();
     let zero = LargeInt::new();
     assert_eq!(def, zero);
+}
+
+#[test]
+fn test_comparisons() {
+    let li = LargeInt::from(42);
+    assert_eq!(li, 42);
+    assert!(li > 41);
+    assert!(li < 43);
+    assert!(44 > li);
+    assert!(42 == li);
 }
 
 #[test]

@@ -10,7 +10,7 @@ use std::u128;
 
 /// A signed integer that is unbounded in both positive
 /// and negative.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Eq, Hash)]
 pub struct LargeInt {
     // use u128 since, if someone needs a LargeInt, it's likely
     // going to end up larger than u128::MAX
@@ -24,7 +24,8 @@ fn is_u128_negative(val: u128) -> bool {
     (val & SIGN_BIT) > 1
 }
 
-fn reorder_by_ones_count(left: LargeInt, right: LargeInt) -> (LargeInt, LargeInt) {
+fn reorder_by_ones_count<'a>(left: &'a mut LargeInt, right: &'a mut LargeInt) 
+-> (&'a mut LargeInt, &'a mut LargeInt) {
     if right.count_ones() < left.count_ones() {
         (right, left)
     } else {
@@ -236,13 +237,13 @@ impl LargeInt {
         }
         
         // slightly optimise by multiplying by the value with less 1's
-        let (multiplier, mut multiplicand) = reorder_by_ones_count(self, other);
+        let (multiplier, multiplicand) = reorder_by_ones_count(&mut self, &mut other);
         let n = multiplier.bytes.len();
         let m = multiplicand.bytes.len();
         let size = n.max(m) * 2;
         multiplicand.expand_to(size);
         let zero = LargeInt::from(0);
-        let mut result = LargeInt::with_size(size);
+        let mut result = LargeInt::from(0);
         let mut mask = LargeInt::from(1);
         mask.expand_to_ignore_sign(n);
 
